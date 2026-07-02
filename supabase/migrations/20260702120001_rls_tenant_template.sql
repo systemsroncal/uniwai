@@ -1,0 +1,72 @@
+-- =============================================================================
+-- UniWai CRM — RLS tenant isolation template
+-- =============================================================================
+-- Apply this pattern to every tenant-scoped table created in future migrations.
+--
+-- Prerequisites:
+--   1. JWT issued by Supabase Auth (or api-core) must include claim: tenant_id
+--   2. Each row stores tenant_id UUID matching the JWT claim
+--   3. Service role bypasses RLS; never expose service_role to the browser
+--
+-- Example table (uncomment when implementing a real entity):
+--
+-- CREATE TABLE public.example_tenant_table (
+--   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   tenant_id   uuid NOT NULL REFERENCES public.tenants (id) ON DELETE CASCADE,
+--   name        text NOT NULL,
+--   created_at  timestamptz NOT NULL DEFAULT now(),
+--   updated_at  timestamptz NOT NULL DEFAULT now()
+-- );
+--
+-- CREATE INDEX idx_example_tenant_table_tenant_id
+--   ON public.example_tenant_table (tenant_id);
+--
+-- ALTER TABLE public.example_tenant_table ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.example_tenant_table FORCE ROW LEVEL SECURITY;
+--
+-- Helper: current tenant from JWT (NULL if claim missing or invalid)
+-- CREATE OR REPLACE FUNCTION public.current_tenant_id()
+-- RETURNS uuid
+-- LANGUAGE sql
+-- STABLE
+-- AS $$
+--   SELECT NULLIF(auth.jwt() ->> 'tenant_id', '')::uuid;
+-- $$;
+--
+-- SELECT — tenant members read only their tenant's rows
+-- CREATE POLICY "tenant_isolation_select" ON public.example_tenant_table
+--   FOR SELECT
+--   TO authenticated
+--   USING (tenant_id = public.current_tenant_id());
+--
+-- INSERT — new rows must belong to the caller's tenant
+-- CREATE POLICY "tenant_isolation_insert" ON public.example_tenant_table
+--   FOR INSERT
+--   TO authenticated
+--   WITH CHECK (tenant_id = public.current_tenant_id());
+--
+-- UPDATE — cannot change tenant_id; only own tenant rows
+-- CREATE POLICY "tenant_isolation_update" ON public.example_tenant_table
+--   FOR UPDATE
+--   TO authenticated
+--   USING (tenant_id = public.current_tenant_id())
+--   WITH CHECK (tenant_id = public.current_tenant_id());
+--
+-- DELETE — only own tenant rows
+-- CREATE POLICY "tenant_isolation_delete" ON public.example_tenant_table
+--   FOR DELETE
+--   TO authenticated
+--   USING (tenant_id = public.current_tenant_id());
+--
+-- Superadmin / platform ops (optional): separate role or claim, e.g. app_role = 'superadmin'
+-- CREATE POLICY "superadmin_all" ON public.example_tenant_table
+--   FOR ALL
+--   TO authenticated
+--   USING ((auth.jwt() ->> 'app_role') = 'superadmin')
+--   WITH CHECK ((auth.jwt() ->> 'app_role') = 'superadmin');
+--
+-- =============================================================================
+-- No-op migration: documents the pattern; real tables add policies in their migrations.
+-- =============================================================================
+
+SELECT 1;

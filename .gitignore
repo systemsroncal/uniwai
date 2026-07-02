@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.local
+*.log
+.DS_Store
+dist/
+.next/
+.turbo/
+packages/database/node_modules/
+packages/shared/node_modules/
+apps/*/node_modules/
+services/*/node_modules/
+.supabase/

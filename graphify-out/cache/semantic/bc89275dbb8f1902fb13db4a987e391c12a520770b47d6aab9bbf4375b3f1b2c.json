@@ -1,0 +1,1 @@
+{"nodes": [{"id": "docker_redis_service", "label": "uniwai-redis", "file_type": "code", "source_file": "docker/docker-compose.yml", "source_location": "2-15", "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}

@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>UniWai CRM — Análisis Técnico</title>
+  <style>
+@media print { body { margin: 0; } h1, h2, h3 { page-break-after: avoid; } }
+body { font-family: "Segoe UI", system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1.5rem; line-height: 1.6; color: #1a1a1a; }
+h1 { border-bottom: 2px solid #2563eb; padding-bottom: 0.5rem; }
+h2 { color: #1e40af; margin-top: 2rem; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.9rem; }
+th, td { border: 1px solid #d1d5db; padding: 0.5rem 0.75rem; text-align: left; }
+th { background: #f3f4f6; }
+code { font-size: 0.85em; }
+pre code { background: transparent; color: inherit; padding: 0; border-radius: 0; }
+pre { background: #1e293b; color: #e2e8f0; padding: 1rem; overflow-x: auto; border-radius: 8px; }
+blockquote { border-left: 4px solid #2563eb; margin: 1rem 0; padding-left: 1rem; color: #4b5563; }
+.print-hint { background: #eff6ff; border: 1px solid #93c5fd; padding: 1rem; border-radius: 8px; margin-bottom: 2rem; }
+@media print { .print-hint { display: none; } }
+</style>
+</head>
+<body>
+  <div class="print-hint">
+    <strong>Exportar a PDF:</strong> Ctrl+P → Destino: &quot;Guardar como PDF&quot; → Guardar.
+  </div>
+  <h1>UniWai CRM — Especificación Técnica y Análisis de Arquitectura</h1>
+<p><strong>Producto:</strong> UniWai CRM (Enterprise Edition)<br><strong>Repositorio:</strong> <a href="https://github.com/systemsroncal/uniwai.git"><code>systemsroncal/uniwai</code></a><br><strong>Dominios proyectados:</strong> uniwaicrm.com · uniwai.com · uniwai.pe<br><strong>Versión del documento:</strong> 2.0<br><strong>Fecha:</strong> 2026-07-02<br><strong>Estado:</strong> En revisión — decisiones parciales aprobadas (ver §0.1)<br><strong>Autor:</strong> Sesión de diseño Superpowers (brainstorming)</p>
+<hr>
+<h2>0. Linaje documental</h2>
+<p>Este spec <strong>unifica</strong> tres fuentes:</p>
+<table>
+<thead>
+<tr>
+<th>Fuente</th>
+<th>Rol</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>WA-PRO-CRM</strong> (<code>Analisis_Tecnico_SaaS_CRM_WhatsApp.pdf</code>)</td>
+<td>Base funcional: módulos core, anti-ban, bot builder, Kanban, e-commerce, marketing, reportes Excel, roles</td>
+</tr>
+<tr>
+<td><strong>UniWai CRM SRS V3</strong> (<code>uniwai_crm_srs_v3.pdf</code>)</td>
+<td>Visión enterprise: Supabase CLI, CQRS, Event Bus, MCP, multi-agente, plugins, white label</td>
+</tr>
+<tr>
+<td><strong>Sesión brainstorming</strong> (este repo)</td>
+<td>Decisiones de fases, monorepo, orden de implementación, gates de aprobación</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>WA-PRO-CRM</strong> es la base técnica sobre la que se apalanca <strong>UniWai CRM</strong>. El producto comercial se llama <strong>UniWai CRM</strong>.</p>
+</blockquote>
+<h3>0.1 Decisiones aprobadas</h3>
+<table>
+<thead>
+<tr>
+<th>Decisión</th>
+<th>Valor</th>
+<th>Fecha</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Nombre producto</td>
+<td><strong>UniWai CRM</strong></td>
+<td>2026-07-02</td>
+</tr>
+<tr>
+<td>Repositorio</td>
+<td><code>github.com/systemsroncal/uniwai</code></td>
+<td>2026-07-02</td>
+</tr>
+<tr>
+<td>Base de datos dev/prod</td>
+<td><strong>Supabase CLI</strong> (+ Prisma para dominio CRM)</td>
+<td>2026-07-02</td>
+</tr>
+<tr>
+<td>Colas / estado temporal</td>
+<td><strong>Redis</strong> + BullMQ (Docker aparte)</td>
+<td>2026-07-02</td>
+</tr>
+<tr>
+<td>Planes SaaS</td>
+<td>Básico $9.99 · Lite $14.99 · Pro $24.99 · Enterprise $39.99 · Custom</td>
+<td>2026-07-02</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>1. Resumen ejecutivo</h2>
+<p><strong>UniWai CRM</strong> es un <strong>SaaS CRM omnicanal multi-tenant</strong> especializado en WhatsApp (con roadmap a Instagram, Messenger, TikTok), orientado a PYMEs latinoamericanas (referencia competitiva: <a href="https://chatpro.pe">ChatPro</a>). Combina:</p>
+<ul>
+<li>Conexión <strong>oficial</strong> (Meta Cloud API) y <strong>no oficial</strong> (Baileys / QR vía WebSockets)</li>
+<li><strong>Constructor visual de bots</strong> (React Flow) con live preview en mockup de smartphone</li>
+<li><strong>Motor anti-ban</strong> y red P2P de calentamiento de números</li>
+<li><strong>CRM Kanban</strong> con human takeover y reanudación de flujo</li>
+<li><strong>E-commerce in-chat</strong> con catálogo, checkout, PostGIS para envíos locales</li>
+<li><strong>IA generativa BYOK</strong> con middleware anti-prompt-injection</li>
+<li><strong>Facturación</strong> por planes (límites de bots, vendedores, etc.) vía Mercado Pago</li>
+<li><strong>Marketing</strong> (remarketing, listas Excel hasta 499 contactos)</li>
+<li><strong>Reportes</strong> exportables a Excel (2 hojas: resumen órdenes + compradores)</li>
+<li><strong>Panel Superadmin</strong> (suscripciones, estadísticas globales, baneos)</li>
+</ul>
+<p><strong>Decisión arquitectónica clave:</strong> Monorepo con separación clara entre UI (Next.js), API (Hono/Bun), workers (Baileys, BullMQ, warmup) y paquete compartido de base de datos (Prisma).</p>
+<p><strong>Advertencia legal/técnica:</strong> La conexión no oficial (Baileys) viola los Términos de Servicio de WhatsApp/Meta. El producto debe etiquetarlo explícitamente, ofrecer la API oficial como canal recomendado, y documentar riesgo de baneo permanente del número. Las funciones &quot;anti-ban&quot; reducen probabilidad pero <strong>no garantizan</strong> cumplimiento ni ausencia de baneos.</p>
+<hr>
+<h2>2. Análisis competitivo (ChatPro y diferenciadores)</h2>
+<h3>2.1 Referencia: ChatPro (chatpro.pe)</h3>
+<table>
+<thead>
+<tr>
+<th>Aspecto</th>
+<th>Observación</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Posicionamiento</td>
+<td>Plataforma SaaS de automatización WhatsApp para negocios en Perú/LATAM</td>
+</tr>
+<tr>
+<td>Propuesta</td>
+<td>Bots, CRM, campañas — enfoque en facilidad para PYME</td>
+</tr>
+<tr>
+<td>Acceso</td>
+<td>Plataforma web con login; onboarding orientado a negocio</td>
+</tr>
+</tbody></table>
+<h3>2.2 Diferenciadores propuestos para UniWai CRM</h3>
+<table>
+<thead>
+<tr>
+<th>Funcionalidad</th>
+<th>ChatPro (típico del segmento)</th>
+<th>UniWai CRM (objetivo)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Bot Builder visual</td>
+<td>Flujos predefinidos / editor básico</td>
+<td>React Flow drag-and-drop + <strong>live preview</strong> sin guardar</td>
+</tr>
+<tr>
+<td>Anti-ban</td>
+<td>Delays básicos</td>
+<td>Spintax, presencia <code>composing</code>, red P2P warmup, multitext</td>
+</tr>
+<tr>
+<td>E-commerce</td>
+<td>Catálogo / links externos</td>
+<td>Google Sheets + catálogo WA + <strong>PostGIS</strong> tarifa envío local</td>
+</tr>
+<tr>
+<td>IA</td>
+<td>Respuestas automáticas</td>
+<td><strong>BYOK</strong> multi-proveedor + base conocimiento + anti-injection</td>
+</tr>
+<tr>
+<td>Pagos in-chat</td>
+<td>Variable</td>
+<td>Mercado Pago nativo, credenciales en dashboard (no <code>.env</code> tenant)</td>
+</tr>
+<tr>
+<td>Human takeover</td>
+<td>Parcial en competidores</td>
+<td>Toggle por prospecto + <strong>reanudación exacta</strong> vía <code>currentNodeId</code> en Redis</td>
+</tr>
+<tr>
+<td>Marketing</td>
+<td>Campañas masivas</td>
+<td>Listas Excel (≤499), remarketing inteligente</td>
+</tr>
+<tr>
+<td>Reportes</td>
+<td>Básicos</td>
+<td>Excel 2 hojas (órdenes + compradores) con estadísticas</td>
+</tr>
+<tr>
+<td>Superadmin</td>
+<td>—</td>
+<td>Panel maestro, suspensión/ban, stats globales, keys IA compartidas</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>3. Stack tecnológico obligatorio</h2>
+<table>
+<thead>
+<tr>
+<th>Capa</th>
+<th>Tecnología</th>
+<th>Justificación</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Runtime</td>
+<td><strong>Bun 1.x</strong></td>
+<td>WebSockets nativos, bajo overhead, compatible con workers</td>
+</tr>
+<tr>
+<td>API</td>
+<td><strong>Hono</strong> (recomendado sobre Elysia por ecosistema middleware)</td>
+<td>Ligero, tipado, edge-ready, middleware JWT/CORS</td>
+</tr>
+<tr>
+<td>Frontend</td>
+<td><strong>Next.js 15</strong> App Router, React 19, TypeScript</td>
+<td>SSR landing, RSC para dashboard, SEO</td>
+</tr>
+<tr>
+<td>UI</td>
+<td><strong>Tailwind CSS v4</strong>, <strong>shadcn/ui</strong>, <strong>Framer Motion</strong></td>
+<td>Design system consistente; motion con <code>prefers-reduced-motion</code></td>
+</tr>
+<tr>
+<td>Estado cliente</td>
+<td><strong>Zustand</strong></td>
+<td>Bot builder + live preview reactivo</td>
+</tr>
+<tr>
+<td>Lienzo bots</td>
+<td><strong>React Flow</strong></td>
+<td>Nodos/edges, serialización JSON</td>
+</tr>
+<tr>
+<td>ORM / DB</td>
+<td><strong>Prisma</strong> + <strong>Supabase CLI</strong> (PostgreSQL 16 local/prod)</td>
+<td>Paridad dev→prod; tipado end-to-end</td>
+</tr>
+<tr>
+<td>Supabase nativo</td>
+<td>Auth, RLS, Realtime, Storage, Vault, Edge Functions</td>
+<td>Multi-tenant criptográfico (SRS V3)</td>
+</tr>
+<tr>
+<td>Extensiones PG</td>
+<td><strong>pgvector</strong> (embeddings RAG), <strong>PostGIS</strong> (distancia envíos)</td>
+<td>IA + logística espacial</td>
+</tr>
+<tr>
+<td>Eventos</td>
+<td><strong>Redis Streams / BullMQ</strong> (Event Bus)</td>
+<td>CQRS, desacoplamiento (SRS V3)</td>
+</tr>
+<tr>
+<td>IA avanzada</td>
+<td><strong>MCP</strong> + multi-agente (fases posteriores)</td>
+<td>Diferenciador enterprise</td>
+</tr>
+<tr>
+<td>Colas</td>
+<td><strong>Redis</strong> + <strong>BullMQ</strong></td>
+<td>Warmup, envío async, webhooks, IA</td>
+</tr>
+<tr>
+<td>WhatsApp oficial</td>
+<td>Meta Cloud API</td>
+<td>Canal compliant</td>
+</tr>
+<tr>
+<td>WhatsApp no oficial</td>
+<td><strong>@whiskeysockets/baileys</strong></td>
+<td>QR, WebSocket; worker aislado</td>
+</tr>
+<tr>
+<td>Storage archivos</td>
+<td><strong>S3-compatible</strong> (MinIO dev, AWS/R2 prod)</td>
+<td>Imágenes/PDF en flujos</td>
+</tr>
+<tr>
+<td>Pagos</td>
+<td><strong>Mercado Pago</strong></td>
+<td>Credenciales por tenant en DB cifradas</td>
+</tr>
+</tbody></table>
+<h3>3.1 ¿Se puede hacer landing + CRM con Bun?</h3>
+<p><strong>Sí, con arquitectura híbrida recomendada:</strong></p>
+<pre><code>apps/web-crm     → Next.js (build Node/Bun; dev con bun o next)
+apps/api-core    → Hono servido con Bun
+services/wa-worker → Bun puro (Baileys + BullMQ consumers)
+</code></pre>
+<ul>
+<li><strong>Landing y CRM:</strong> Next.js 15 (no reemplazar por Hono SSR para el dashboard complejo).</li>
+<li><strong>API y workers:</strong> Bun como runtime prioritario.</li>
+<li><strong>Un solo <code>bun install</code></strong> en monorepo (workspaces) unifica dependencias.</li>
+</ul>
+<hr>
+<h2>4. Arquitectura del sistema</h2>
+<h3>4.1 Diagrama de alto nivel</h3>
+<pre><code>                         ┌─────────────────────────────────────┐
+                         │           apps/web-crm              │
+                         │  Next.js 15 · Landing + Dashboard     │
+                         │  Zustand · React Flow · shadcn      │
+                         └──────────────┬──────────────────────┘
+                                        │ REST / SSE
+                         ┌──────────────▼──────────────────────┐
+                         │           apps/api-core             │
+                         │  Hono · Auth · Tenancy · Webhooks   │
+                         └──────────────┬──────────────────────┘
+                    ┌──────────────────┼──────────────────┐
+                    ▼                  ▼                  ▼
+           ┌─────────────┐   ┌─────────────┐   ┌─────────────────┐
+           │ PostgreSQL  │   │    Redis    │   │ services/       │
+           │ Prisma      │   │ BullMQ      │   │ wa-worker       │
+           │ pgvector    │   │ session/    │   │ Baileys·Warmup  │
+           │ PostGIS     │   │ flow state  │   │ Meta webhooks   │
+           └─────────────┘   └─────────────┘   └─────────────────┘
+                    │
+                    ▼
+           ┌─────────────┐
+           │ S3 / MinIO  │
+           └─────────────┘
+</code></pre>
+<h3>4.2 Estructura monorepo</h3>
+<pre><code>uniwai/                         # git remote → github.com/systemsroncal/uniwai
+├── apps/
+│   ├── web-crm/                # Next.js 15 — landing, dashboard, bot builder
+│   ├── api-core/               # Hono API — REST, webhooks, event bus
+│   └── widget-chat/            # (Fase 2+) embeddable chat widget
+├── packages/
+│   ├── database/               # Prisma + supabase gen types
+│   ├── shared/                 # Tipos Zod, eventos, RBAC
+│   └── ui/                     # shadcn compartido
+├── services/
+│   ├── wa-worker/              # Baileys, warmup P2P, flow executor
+│   ├── ai-orchestrator/        # (Fase 6+) RAG, MCP, multi-agente
+│   └── automation-engine/    # (Fase 7+) triggers tipo Zapier
+├── supabase/                   # migrations, RLS, seed (Supabase CLI)
+├── docker/
+│   └── docker-compose.yml      # Redis (+ override si no usa supabase start)
+├── docs/superpowers/specs/
+└── package.json                # bun workspaces + turborepo
+</code></pre>
+<h3>4.3 Multi-tenancy estricto</h3>
+<ul>
+<li>Toda tabla de negocio incluye <code>tenantId</code> (UUID).</li>
+<li><strong>Prisma middleware</strong> inyecta <code>tenantId</code> desde JWT en cada <code>find/create/update/delete</code>.</li>
+<li><strong>Imposible</strong> omitir filtro: queries sin <code>tenantId</code> fallan en middleware (fail-closed).</li>
+<li>Superadmin usa <code>role=SUPERADMIN</code> + contexto sin tenant para panel global (rutas separadas <code>/admin/*</code>).</li>
+</ul>
+<h3>4.4 Roles y permisos (RBAC)</h3>
+<table>
+<thead>
+<tr>
+<th>Rol</th>
+<th>Alcance</th>
+<th>Permisos clave</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>SUPERADMIN</strong></td>
+<td>Plataforma</td>
+<td>Planes, precios, suspender/banear tenants, stats globales, pool keys IA opcionales</td>
+</tr>
+<tr>
+<td><strong>OWNER</strong></td>
+<td>Su tenant</td>
+<td>Bots, flujos, MP creds, equipo, IA BYOK, warmup config, reportes</td>
+</tr>
+<tr>
+<td><strong>VENDEDOR</strong></td>
+<td>Su tenant (limitado)</td>
+<td>Kanban, chat, toggle bot por prospecto — <strong>sin</strong> configuración ni billing</td>
+</tr>
+</tbody></table>
+<p>Matriz guardada en <code>packages/shared/src/rbac.ts</code>; enforced en Hono middleware + UI route guards.</p>
+<hr>
+<h2>5. Módulos funcionales (detalle)</h2>
+<h3>5.1 Constructor de Bots (Bot Builder) + Live Preview</h3>
+<p><strong>UI:</strong> Pantalla dividida — lienzo React Flow (70%) + <code>SmartphoneMockup</code> (30%).</p>
+<p><strong>Nodos MVP:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Nodo</th>
+<th>Comportamiento</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>MessageMultiText</code></td>
+<td>Array de variantes + Spintax <code>{hola|buenos días}</code></td>
+</tr>
+<tr>
+<td><code>Buttons</code></td>
+<td>Hasta 3 botones reply (límites WA)</td>
+</tr>
+<tr>
+<td><code>List</code></td>
+<td>Lista de selección WhatsApp</td>
+</tr>
+<tr>
+<td><code>Media</code></td>
+<td>Imagen/PDF → upload S3 → URL en mensaje</td>
+</tr>
+<tr>
+<td><code>Condition</code></td>
+<td>Rama por texto/regex/variable</td>
+</tr>
+<tr>
+<td><code>SetVariable</code></td>
+<td>Guardar en contexto prospecto (Redis + DB)</td>
+</tr>
+<tr>
+<td><code>AIResponse</code></td>
+<td>Llama middleware IA con <code>businessContext</code></td>
+</tr>
+<tr>
+<td><code>ProductCatalog</code></td>
+<td>Lee Sheets o catálogo WA nativo</td>
+</tr>
+<tr>
+<td><code>Checkout</code></td>
+<td>Carrito, total, ubicación, envío, pago</td>
+</tr>
+<tr>
+<td><code>HumanHandoff</code></td>
+<td>Pausa bot, notifica vendedor</td>
+</tr>
+<tr>
+<td><code>Delay</code></td>
+<td>Espera N segundos (anti-ban)</td>
+</tr>
+</tbody></table>
+<p><strong>Live Preview:</strong> Zustand store <code>useBotPreviewStore</code> sincronizado con nodo seleccionado en React Flow. Renderiza burbujas WA sin persistir. Avanzar/retroceder con iconos en toolbar del mockup.</p>
+<p><strong>Persistencia:</strong> <code>BotFlow.nodes</code> y <code>BotFlow.edges</code> como JSONB en Prisma. Hasta <strong>20 flujos</strong> por tenant (límite configurable por plan).</p>
+<p><strong>Plantillas:</strong> <code>FlowTemplate</code> globales (superadmin) + por tenant; clonar al crear flujo.</p>
+<h3>5.2 Motor Anti-Ban y Calentador P2P</h3>
+<p><strong>Worker:</strong> <code>services/wa-worker/src/jobs/warmup-p2p.ts</code> (BullMQ queue <code>warmup</code>).</p>
+<p><strong>Lógica:</strong></p>
+<ol>
+<li>Seleccionar instancias <code>WhatsAppInstance</code> con <code>isInWarmupNetwork = true</code>.</li>
+<li>Emparejar pares (grafo no dirigido, evitar mismo tenant si política lo exige).</li>
+<li>Antes de enviar: evento Baileys <code>presenceSubscribe</code> + <code>sendPresenceUpdate(&#39;composing&#39;)</code>.</li>
+<li>Duración composing: <code>15–45 ms × caracteres</code> (aleatorio por carácter).</li>
+<li>Aplicar Spintax al texto desde <code>WarmupMessageTemplate</code> (multitext del tenant).</li>
+<li>Registrar en <code>WarmupLog</code> (origen, destino, timestamp, texto hash).</li>
+</ol>
+<p><strong>Config por número (OWNER):</strong></p>
+<ul>
+<li>Lista de números destino manual</li>
+<li>Opt-in a red CRM (<code>joinWarmupNetwork</code>)</li>
+<li>Multitext de mensajes de calentamiento</li>
+<li>Horarios y límites diarios</li>
+</ul>
+<h3>5.3 E-commerce In-App y Logística PostGIS</h3>
+<p><strong>Fuentes de productos:</strong></p>
+<ol>
+<li>API Google Sheets (OAuth o service account por tenant)</li>
+<li>Catálogo nativo WhatsApp Business (Meta Commerce API)</li>
+</ol>
+<p><strong>Flujo checkout:</strong></p>
+<ol>
+<li>Usuario selecciona productos en nodo catálogo</li>
+<li>Bot construye <code>Order</code> draft en Redis + DB</li>
+<li>Solicita ubicación (pin WA) o dirección texto</li>
+<li>Si envío local: <code>ST_DistanceSphere(tenant.location, user.location)</code> → tarifa por km/zona</li>
+<li>Si agencia: tarifa fija configurada por tenant</li>
+<li>Pago: Mercado Pago link/in-chat o contraentrega (flag <code>cashOnDelivery</code>)</li>
+<li>Confirmación → alerta OWNER + registro en Kanban columna &quot;Cierre&quot;</li>
+</ol>
+<p><strong>Modelo PostGIS:</strong> <code>Tenant.storeLocation</code> y <code>Order.deliveryLocation</code> como <code>geography(Point, 4326)</code>.</p>
+<h3>5.4 CRM Kanban y Human Takeover</h3>
+<p><strong>Columnas default:</strong> Lead → Contactado → Negociación → Cierre (customizables por tenant).</p>
+<p><strong>Tarjeta prospecto:</strong> nombre, teléfono, último mensaje, etiquetas, bot on/off.</p>
+<p><strong>Human takeover:</strong></p>
+<ul>
+<li><code>Contact.botEnabled = false</code> → mensajes van al inbox del vendedor</li>
+<li>Al reactivar: worker lee Redis <code>flow:contact:{id}:currentNodeId</code> y ejecuta desde ese nodo</li>
+<li>Estado flujo también en <code>Contact.flowState</code> (JSONB backup)</li>
+</ul>
+<p><strong>Chat embebido:</strong> Panel lateral al seleccionar tarjeta; mismo componente que inbox.</p>
+<h3>5.5 Middleware IA Segura (BYOK + Anti-Injection)</h3>
+<p><strong>Proveedores:</strong> OpenAI, Gemini, DeepSeek (adapter pattern).</p>
+<p><strong>Config:</strong></p>
+<ul>
+<li>SUPERADMIN: keys pool opcionales para plan básico</li>
+<li>OWNER: BYOK en dashboard (cifradas AES-256-GCM con <code>ENCRYPTION_KEY</code> servidor)</li>
+</ul>
+<p><strong>Pipeline:</strong></p>
+<pre><code>userMessage → sanitizer → injectionDetector → contextBuilder(businessContext + RAG pgvector)
+           → LLM → outputValidator → send or reject
+</code></pre>
+<p><strong>Rechazos explícitos:</strong> clima, tecnología del CRM, código, system prompts, temas fuera de <code>businessContext</code>.</p>
+<p><strong>RAG:</strong> <code>KnowledgeDocument</code> chunked + embeddings en pgvector; búsqueda top-k por tenant.</p>
+<h3>5.6 Planes, facturación y Mercado Pago</h3>
+<p><strong>Catálogo de planes (USD/mes):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Plan</th>
+<th>Precio</th>
+<th>Bots (números WA)</th>
+<th>Flujos</th>
+<th>Marketing masivo</th>
+<th>Notas</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Básico</strong></td>
+<td><strong>$9.99</strong></td>
+<td>1</td>
+<td>5</td>
+<td>No</td>
+<td>Entrada; sin campañas masivas</td>
+</tr>
+<tr>
+<td><strong>Lite</strong></td>
+<td><strong>$14.99</strong></td>
+<td>2</td>
+<td>10</td>
+<td>Sí</td>
+<td>QR/Baileys: <strong>499</strong>/campaña · Meta API: <strong>1,000</strong>/campaña</td>
+</tr>
+<tr>
+<td><strong>Pro</strong></td>
+<td><strong>$24.99</strong></td>
+<td>5</td>
+<td>20</td>
+<td>Sí</td>
+<td>QR/Baileys: <strong>499</strong>/campaña · Meta API: <strong>2,000</strong>/campaña</td>
+</tr>
+<tr>
+<td><strong>Enterprise</strong></td>
+<td><strong>$39.99</strong></td>
+<td>10</td>
+<td>40</td>
+<td>Sí</td>
+<td>QR/Baileys: <strong>499</strong>/campaña · Meta API: <strong>3,000</strong>/campaña</td>
+</tr>
+<tr>
+<td><strong>Custom</strong></td>
+<td>Contactar</td>
+<td>A medida</td>
+<td>A medida</td>
+<td>Sí</td>
+<td>QR/Baileys: <strong>499</strong>/campaña · Meta API: <strong>1,000</strong>/campaña (base); límites negociables</td>
+</tr>
+</tbody></table>
+<p><strong>Reglas de marketing por canal:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Canal de envío</th>
+<th>Límite por campaña</th>
+<th>Motivo</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>QR / WhatsApp Business (Baileys)</td>
+<td><strong>499 contactos</strong> (todos los planes con marketing)</td>
+<td>Mitigar riesgo de baneo en canal no oficial</td>
+</tr>
+<tr>
+<td>Meta Cloud API (oficial)</td>
+<td><strong>1k / 2k / 3k</strong> según plan (Lite / Pro / Enterprise)</td>
+<td>Mayor tolerancia; sujeto a políticas Meta</td>
+</tr>
+</tbody></table>
+<p><strong>Modelo <code>Plan</code> en Prisma (límites JSON):</strong></p>
+<pre><code class="language-json">{
+  &quot;maxBots&quot;: 2,
+  &quot;maxFlows&quot;: 10,
+  &quot;marketingEnabled&quot;: true,
+  &quot;marketingMaxPerCampaign&quot;: {
+    &quot;BAILEYS_QR&quot;: 499,
+    &quot;META_CLOUD_API&quot;: 1000
+  },
+  &quot;maxVendedores&quot;: 0
+}
+</code></pre>
+<p><strong>Mercado Pago:</strong> <code>TenantPaymentConfig</code> (access_token, public_key) cifrados en dashboard; webhook en api-core. Suscripción SaaS cobrada al OWNER; pagos in-chat de clientes finales usan credenciales del tenant.</p>
+<p><strong>Límites:</strong> middleware en api-core verifica <code>Subscription.plan.limits</code> antes de crear bot, flujo, campaña o usuario vendedor. Superadmin puede override en plan Custom.</p>
+<h3>5.7 Marketing y remarketing</h3>
+<ul>
+<li>Import Excel: límite <strong>por campaña</strong> según plan y canal (ver §5.6)</li>
+<li><strong>QR/Baileys:</strong> tope fijo <strong>499</strong> contactos/campaña en todos los planes con marketing</li>
+<li><strong>Meta Cloud API:</strong> 1,000 (Lite) · 2,000 (Pro) · 3,000 (Enterprise) · 1,000 base (Custom)</li>
+<li>Columnas Excel: <code>phone, name, category, tag</code></li>
+<li>Campañas Meta requieren plantilla aprobada; Baileys con throttle agresivo (60–120 s entre envíos)</li>
+<li>Remarketing: reglas sobre <code>Contact</code> sin respuesta / abandono carrito</li>
+<li>Cola BullMQ <code>campaigns</code> con rate limit por <code>connectionType</code></li>
+</ul>
+<h3>5.8 Reportes y exportación Excel</h3>
+<p><strong>Endpoint:</strong> <code>GET /api/reports/sales/export?from=&amp;to=</code></p>
+<p><strong>Libro Excel (2 hojas):</strong></p>
+<ol>
+<li><strong>Resumen Órdenes:</strong> totales, ticket medio, por estado, por día</li>
+<li><strong>Compradores:</strong> contactos con órdenes, monto, fecha, productos</li>
+</ol>
+<p>Librería: <code>exceljs</code> en api-core.</p>
+<h3>5.9 Superadmin y alertas</h3>
+<ul>
+<li>Dashboard: MRR, tenants activos, mensajes/día, instancias baneadas</li>
+<li>Acciones: suspender tenant, banear, resetear instancia WA</li>
+<li>Alertas OWNER: compra realizada, prospecto hot, error instancia WA (email + in-app)</li>
+</ul>
+<h3>5.10 Landing</h3>
+<ul>
+<li>Next.js marketing en <code>/</code> (pública)</li>
+<li>App en <code>/app/*</code> (auth required)</li>
+<li>SEO: meta, schema Organization, CTA planes</li>
+</ul>
+<hr>
+<h2>6. Modelo de datos (Prisma — resumen)</h2>
+<h3>6.1 Entidades principales</h3>
+<pre><code>Tenant ─┬─ User (role)
+        ├─ Subscription / Plan
+        ├─ WhatsAppInstance (official|baileys, warmup flags)
+        ├─ BotFlow (nodes Json, edges Json)
+        ├─ FlowTemplate
+        ├─ Contact (botEnabled, flowState, kanbanColumn)
+        ├─ ChatMessage
+        ├─ Product (source: sheets|wa_catalog)
+        ├─ Order (delivery geography, totals, paymentStatus)
+        ├─ KnowledgeDocument + Embedding (pgvector)
+        ├─ TenantPaymentConfig (encrypted)
+        ├─ WarmupConfig / WarmupLog
+        ├─ Campaign / CampaignContact
+        └─ AuditLog
+</code></pre>
+<h3>6.2 Campos críticos</h3>
+<p><strong>WhatsAppInstance:</strong></p>
+<ul>
+<li><code>connectionType</code>: <code>META_CLOUD</code> | <code>BAILEYS</code></li>
+<li><code>isInWarmupNetwork</code>: boolean</li>
+<li><code>warmupPartnerIds</code>: string[]</li>
+<li><code>status</code>: <code>CONNECTED</code> | <code>DISCONNECTED</code> | <code>BANNED</code> | <code>QR_PENDING</code></li>
+</ul>
+<p><strong>Contact:</strong></p>
+<ul>
+<li><code>currentNodeId</code>: string (sync Redis)</li>
+<li><code>botEnabled</code>: boolean</li>
+<li><code>kanbanColumnId</code>: FK</li>
+</ul>
+<p><strong>BotFlow:</strong></p>
+<ul>
+<li><code>nodes</code>: Json (React Flow)</li>
+<li><code>edges</code>: Json</li>
+<li><code>version</code>: int (optimistic locking)</li>
+</ul>
+<hr>
+<h2>7. Seguridad (obligatorio)</h2>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Implementación</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Tenancy</td>
+<td>Prisma middleware + tests</td>
+</tr>
+<tr>
+<td>Auth</td>
+<td>JWT corta vida + refresh httpOnly; validar iss/aud/exp</td>
+</tr>
+<tr>
+<td>CORS</td>
+<td>Allowlist por entorno</td>
+</tr>
+<tr>
+<td>Headers</td>
+<td>HSTS, nosniff, DENY frame, Referrer-Policy</td>
+</tr>
+<tr>
+<td>Rate limit</td>
+<td>5–10/min auth; 60–120/min API; colas WA con throttle</td>
+</tr>
+<tr>
+<td>Secrets</td>
+<td>MP keys, IA keys cifradas; nunca en cliente</td>
+</tr>
+<tr>
+<td>CSP</td>
+<td>Next.js headers en producción</td>
+</tr>
+<tr>
+<td>Source maps</td>
+<td>Deshabilitados en prod</td>
+</tr>
+<tr>
+<td>Prompt injection</td>
+<td>Middleware dedicado + tests adversariales</td>
+</tr>
+<tr>
+<td>Baileys</td>
+<td>Worker aislado; sin exposición de sesión al frontend</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>8. Roadmap por fases (descomposición)</h2>
+<blockquote>
+<p>El prompt original pide monorepo → schema → worker warmup. <strong>Recomendación:</strong> ejecutar warmup (Fase 4) solo después de tener instancias WA estables (Fase 2).</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>Fase</th>
+<th>Entregable</th>
+<th>Duración estimada</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>F0</strong></td>
+<td>Monorepo, Docker, Prisma base, auth multi-tenant</td>
+<td>1–2 sem</td>
+</tr>
+<tr>
+<td><strong>F1</strong></td>
+<td>Meta Cloud API + inbox básico</td>
+<td>2 sem</td>
+</tr>
+<tr>
+<td><strong>F2</strong></td>
+<td>Baileys worker + QR connect</td>
+<td>2 sem</td>
+</tr>
+<tr>
+<td><strong>F3</strong></td>
+<td>Bot Builder + preview + executor</td>
+<td>3 sem</td>
+</tr>
+<tr>
+<td><strong>F4</strong></td>
+<td>Kanban + human takeover</td>
+<td>2 sem</td>
+</tr>
+<tr>
+<td><strong>F5</strong></td>
+<td>Warmup P2P + anti-ban</td>
+<td>2 sem</td>
+</tr>
+<tr>
+<td><strong>F6</strong></td>
+<td>IA BYOK + RAG + anti-injection</td>
+<td>2 sem</td>
+</tr>
+<tr>
+<td><strong>F7</strong></td>
+<td>E-commerce + PostGIS + MP</td>
+<td>3 sem</td>
+</tr>
+<tr>
+<td><strong>F8</strong></td>
+<td>Planes, billing, superadmin</td>
+<td>2 sem</td>
+</tr>
+<tr>
+<td><strong>F9</strong></td>
+<td>Marketing + reportes Excel</td>
+<td>2 sem</td>
+</tr>
+<tr>
+<td><strong>F10</strong></td>
+<td>Landing polish + hardening</td>
+<td>1 sem</td>
+</tr>
+<tr>
+<td><strong>F11+</strong></td>
+<td>MCP, multi-agente, plugins, omnicanal (IG/FB/TikTok), white label</td>
+<td>Roadmap V3</td>
+</tr>
+</tbody></table>
+<p><strong>MVP comercial mínimo (UniWai CRM v1):</strong> F0 + F1 + F3 (solo Meta) + F4 + F6 (básico).</p>
+<p><strong>Visión V3 (SRS):</strong> Event Bus, CQRS chat event-sourcing, MCP servers, plugin engine, voz STT/TTS — <strong>no bloquean v1</strong>.</p>
+<hr>
+<h2>9. Orden de implementación (ajustado)</h2>
+<p>El usuario solicitó:</p>
+<ol>
+<li>Estructura monorepo  </li>
+<li><code>schema.prisma</code> completo  </li>
+<li>Worker calentador P2P</li>
+</ol>
+<p><strong>Orden aprobado para el plan de implementación</strong> (con ajuste justificado):</p>
+<ol>
+<li>Monorepo + Docker + Prisma schema <strong>completo</strong> (todas las entidades, migración inicial)</li>
+<li>api-core: auth, tenancy middleware, health</li>
+<li>web-crm: shell Next.js, login, layout dashboard</li>
+<li>wa-worker: conexión Meta + Baileys (antes que warmup)</li>
+<li>Bot builder + executor</li>
+<li>Kanban + takeover</li>
+<li><strong>Warmup P2P worker</strong> (depende de 4)</li>
+<li>Resto de módulos por fases</li>
+</ol>
+<hr>
+<h2>10. Entorno de desarrollo — Base de datos ✅ Supabase CLI</h2>
+<p><strong>Decisión final (aprobada):</strong> Supabase CLI como única fuente de verdad para PostgreSQL, Auth, RLS, Realtime y Storage.</p>
+<pre><code class="language-bash">supabase init          # una vez
+supabase start         # Postgres 16 + Auth + Realtime + Storage + pgvector
+supabase migration new # cambios de esquema
+supabase db push       # aplicar migraciones
+supabase gen types typescript  # tipos → packages/database
+</code></pre>
+<p><strong>Flujo híbrido Prisma + Supabase:</strong></p>
+<ul>
+<li>Prisma para migraciones complejas y relaciones del dominio CRM</li>
+<li>Supabase Auth + RLS para aislamiento tenant a nivel kernel DB</li>
+<li><code>supabase gen types</code> + Prisma client coexisten en <code>packages/database</code></li>
+</ul>
+<p><strong>Redis adicional</strong> (BullMQ, flow state, event bus):</p>
+<pre><code class="language-yaml"># docker-compose.yml
+services:
+  redis:
+    image: redis:7-alpine
+</code></pre>
+<p><strong>Extensiones obligatorias:</strong> <code>vector</code>, <code>postgis</code> (vía migration Supabase).</p>
+<p><strong>Producción:</strong> Supabase Cloud o self-hosted; Redis managed (Upstash/ElastiCache); workers WA en EC2/EKS (SRS V3).</p>
+<hr>
+<h2>11. UI/UX (principios ui-ux-pro-max)</h2>
+<ul>
+<li><strong>Product type:</strong> SaaS B2B dashboard + landing</li>
+<li><strong>Estilo:</strong> Clean minimal + dark mode opcional; shadcn defaults customizados</li>
+<li><strong>Kanban:</strong> columnas scroll horizontal mobile; tarjetas 44px touch targets</li>
+<li><strong>Bot builder:</strong> undo/redo, zoom React Flow, minimap</li>
+<li><strong>Motion:</strong> Framer ≤300ms; <code>LazyMotion</code> + <code>m</code>; reduced-motion</li>
+<li><strong>Accesibilidad:</strong> contraste 4.5:1, focus rings, labels en forms</li>
+<li><strong>Preview smartphone:</strong> frame fijo 390×844; no depender de hover</li>
+</ul>
+<hr>
+<h2>12. Riesgos y mitigaciones</h2>
+<table>
+<thead>
+<tr>
+<th>Riesgo</th>
+<th>Impacto</th>
+<th>Mitigación</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Baneo Baileys</td>
+<td>Alto</td>
+<td>API oficial como default; warnings UI; warmup no garantiza nada</td>
+</tr>
+<tr>
+<td>Meta policy cambios</td>
+<td>Alto</td>
+<td>Adapter pattern; feature flags</td>
+</tr>
+<tr>
+<td>Complejidad scope</td>
+<td>Alto</td>
+<td>Fases estrictas; MVP sin marketing ni e-commerce primero</td>
+</tr>
+<tr>
+<td>Prompt injection</td>
+<td>Medio</td>
+<td>Middleware + tests + sin tools al LLM</td>
+</tr>
+<tr>
+<td>Rate limits WA</td>
+<td>Medio</td>
+<td>BullMQ throttling por instancia</td>
+</tr>
+<tr>
+<td>MP creds en DB</td>
+<td>Medio</td>
+<td>Cifrado + audit log accesos</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>13. Criterios de aceptación — Fase 0 (fundación)</h2>
+<ul>
+<li><input disabled="" type="checkbox"> <code>bun install</code> en raíz instala todos los workspaces</li>
+<li><input disabled="" type="checkbox"> <code>docker compose up</code> levanta PG+Redis+MinIO con extensiones</li>
+<li><input disabled="" type="checkbox"> <code>prisma migrate dev</code> aplica schema sin errores</li>
+<li><input disabled="" type="checkbox"> api-core responde <code>/health</code> con Bun</li>
+<li><input disabled="" type="checkbox"> web-crm arranca en dev con login mock o real</li>
+<li><input disabled="" type="checkbox"> Test: usuario tenant A no ve datos tenant B</li>
+</ul>
+<hr>
+<h2>14. Próximos pasos (post-aprobación)</h2>
+<ol>
+<li>Usuario aprueba este spec</li>
+<li>Invocar skill <strong>writing-plans</strong> → plan de implementación por tareas</li>
+<li>Ejecutar Fase 0: monorepo + schema + Docker</li>
+<li>Commits incrementales por módulo</li>
+</ol>
+<hr>
+<h2>15. Glosario</h2>
+<table>
+<thead>
+<tr>
+<th>Término</th>
+<th>Definición</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>BYOK</td>
+<td>Bring Your Own Key — cliente usa su API key de IA</td>
+</tr>
+<tr>
+<td>Spintax</td>
+<td><code>{opción1|opción2}</code> — variación de texto</td>
+</tr>
+<tr>
+<td>Human takeover</td>
+<td>Vendedor toma chat; bot pausado</td>
+</tr>
+<tr>
+<td>Warmup network</td>
+<td>Red P2P de números que se mensajean entre sí</td>
+</tr>
+<tr>
+<td>Tenant</td>
+<td>Instancia aislada de un cliente del SaaS</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>16. Control de versiones y despliegue</h2>
+<table>
+<thead>
+<tr>
+<th>Recurso</th>
+<th>Valor</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>GitHub</strong></td>
+<td><a href="https://github.com/systemsroncal/uniwai.git">https://github.com/systemsroncal/uniwai.git</a></td>
+</tr>
+<tr>
+<td><strong>CI/CD</strong></td>
+<td>GitHub Actions (SRS V3)</td>
+</tr>
+<tr>
+<td><strong>Frontend prod</strong></td>
+<td>Vercel (Next.js)</td>
+</tr>
+<tr>
+<td><strong>Workers WA</strong></td>
+<td>AWS EC2/EKS</td>
+</tr>
+<tr>
+<td><strong>DNS/WAF</strong></td>
+<td>Cloudflare</td>
+</tr>
+</tbody></table>
+<p><strong>Primer push:</strong> <code>git init</code> → commit spec + rules → <code>git remote add origin</code> → <code>git push -u origin main</code></p>
+<hr>
+<p><em>Documento UniWai CRM v2.0 — unifica WA-PRO-CRM base + SRS V3 enterprise. Pendiente de aprobación antes de escribir código.</em></p>
+
+</body>
+</html>

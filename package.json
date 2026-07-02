@@ -1,0 +1,40 @@
+{
+  "name": "uniwai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "UniWai CRM — SaaS omnicanal multi-tenant para WhatsApp",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev": "bun run dev:web",
+    "dev:landing": "bun run --filter @uniwai/web-crm dev",
+    "dev:api": "bun run --filter @uniwai/api-core dev",
+    "dev:web": "bun run --filter @uniwai/web-crm dev",
+    "dev:worker": "bun run --filter @uniwai/wa-worker dev",
+    "dev:db": "bun run --filter @uniwai/database db:generate",
+    "build": "bun run --filter @uniwai/web-crm build",
+    "typecheck:api": "bun run --filter @uniwai/api-core typecheck",
+    "typecheck:web": "bun run --filter @uniwai/web-crm typecheck",
+    "typecheck:worker": "bun run --filter @uniwai/wa-worker typecheck",
+    "typecheck:packages": "bun run --filter @uniwai/shared typecheck && bun run --filter @uniwai/database db:generate",
+    "typecheck": "bun run typecheck:api && bun run typecheck:web && bun run typecheck:worker && bun run typecheck:packages",
+    "db:generate": "bun run --filter @uniwai/database db:generate",
+    "db:seed": "bun run --filter @uniwai/database db:seed",
+    "supabase:start": "npx supabase start",
+    "supabase:stop": "npx supabase stop",
+    "supabase:status": "npx supabase status",
+    "supabase:reset": "npx supabase db reset",
+    "env:sync": "node scripts/sync-supabase-env.mjs",
+    "setup:local": "bun install && bun run supabase:start && bun run env:sync",
+    "setup:db": "bun run env:sync && bun run db:generate && bun run --filter @uniwai/database db:push && bun run db:seed",
+    "bootstrap:dev": "bun scripts/bootstrap-dev.mjs"
+  },
+  "devDependencies": {
+    "@prisma/client": "^6.19.3",
+    "@supabase/supabase-js": "^2.110.0",
+    "typescript": "^5.8.3"
+  }
+}

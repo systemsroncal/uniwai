@@ -1,0 +1,628 @@
+// UniWai CRM — Prisma schema (PostgreSQL 16 + pgvector + PostGIS via Supabase migrations)
+// Extensions postgis + vector must be enabled in SQL before geography/vector columns are used:
+//   CREATE EXTENSION IF NOT EXISTS postgis;
+//   CREATE EXTENSION IF NOT EXISTS vector;
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPERADMIN
+  OWNER
+  VENDEDOR
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum WhatsAppConnectionType {
+  META_CLOUD
+  BAILEYS
+}
+
+enum WhatsAppInstanceStatus {
+  CONNECTED
+  DISCONNECTED
+  BANNED
+  QR_PENDING
+}
+
+enum ChatMessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum ChatMessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum ProductSource {
+  SHEETS
+  WA_CATALOG
+}
+
+enum OrderPaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  CASH_ON_DELIVERY
+}
+
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum CampaignChannel {
+  BAILEYS_QR
+  META_CLOUD_API
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum CampaignContactStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  SKIPPED
+}
+
+enum KnowledgeDocumentStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum AuditLogSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+// ─── Platform catalog (no tenantId) ─────────────────────────────────────────
+
+/// SaaS plan catalog. Limits JSON shape:
+/// {
+///   "maxBots": number,
+///   "maxFlows": number,
+///   "marketingEnabled": boolean,
+///   "marketingMaxPerCampaign": { "BAILEYS_QR": number, "META_CLOUD_API": number },
+///   "maxVendedores": number
+/// }
+model Plan {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  description   String?
+  priceMonthly  Decimal? @db.Decimal(10, 2)
+  currency      String   @default("USD")
+  limits        Json
+  isActive      Boolean  @default(true)
+  isCustom      Boolean  @default(false)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+// ─── Tenancy core ────────────────────────────────────────────────────────────
+
+model Tenant {
+  id        String       @id @default(cuid())
+  name      String
+  slug      String       @unique
+  status    TenantStatus @default(ACTIVE)
+  timezone  String       @default("America/Lima")
+
+  // PostGIS-ready: replace with geography(Point, 4326) via raw migration when extension is enabled
+  // storeLocation geography(Point, 4326)
+  storeLat  Float?
+  storeLng  Float?
+  storeAddress String?
+
+  businessContext String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users               User[]
+  subscriptions       Subscription[]
+  whatsAppInstances   WhatsAppInstance[]
+  kanbanColumns       KanbanColumn[]
+  contacts            Contact[]
+  chatMessages        ChatMessage[]
+  botFlows            BotFlow[]
+  flowTemplates       FlowTemplate[]
+  products            Product[]
+  orders              Order[]
+  knowledgeDocuments  KnowledgeDocument[]
+  knowledgeChunks     KnowledgeChunk[]
+  campaigns           Campaign[]
+  campaignContacts    CampaignContact[]
+  paymentConfig       TenantPaymentConfig?
+  warmupConfigs       WarmupConfig[]
+  warmupLogs          WarmupLog[]
+  auditLogs           AuditLog[]
+
+  @@index([status])
+  @@map("tenants")
+}
+
+/// SUPERADMIN may have tenantId = null (platform scope). OWNER/VENDEDOR require tenantId.
+model User {
+  id           String    @id @default(cuid())
+  tenantId     String?
+  email        String    @unique
+  passwordHash String?
+  authUserId   String?   @unique
+  name         String?
+  role         UserRole
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant    Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  auditLogs AuditLog[]
+
+  @@index([tenantId])
+  @@index([role])
+  @@map("users")
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  tenantId               String
+  planId                 String
+  status                 SubscriptionStatus @default(TRIALING)
+  mercadoPagoPreapprovalId String?
+  mercadoPagoPayerId     String?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelledAt            DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  @@index([tenantId])
+  @@index([planId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+// ─── WhatsApp ────────────────────────────────────────────────────────────────
+
+model WhatsAppInstance {
+  id                String                   @id @default(cuid())
+  tenantId          String
+  label             String?
+  phoneNumber       String?
+  connectionType    WhatsAppConnectionType
+  status            WhatsAppInstanceStatus   @default(QR_PENDING)
+  isInWarmupNetwork Boolean                  @default(false)
+  warmupPartnerIds  String[]                 @default([])
+  metaPhoneNumberId String?
+  metaWabaId        String?
+  sessionEncrypted  String?                  @db.Text
+  lastConnectedAt   DateTime?
+  bannedAt          DateTime?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contacts      Contact[]
+  chatMessages  ChatMessage[]
+  botFlows      BotFlow[]
+  campaigns     Campaign[]
+  warmupConfigs WarmupConfig[]
+  warmupLogsSrc WarmupLog[]    @relation("WarmupLogSource")
+  warmupLogsDst WarmupLog[]    @relation("WarmupLogDestination")
+
+  @@unique([tenantId, phoneNumber])
+  @@index([tenantId])
+  @@index([connectionType])
+  @@index([status])
+  @@index([isInWarmupNetwork])
+  @@map("whatsapp_instances")
+}
+
+// ─── CRM / Kanban ────────────────────────────────────────────────────────────
+
+model KanbanColumn {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  position  Int      @default(0)
+  color     String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contacts Contact[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, position])
+  @@map("kanban_columns")
+}
+
+model Contact {
+  id                  String   @id @default(cuid())
+  tenantId            String
+  whatsAppInstanceId  String?
+  kanbanColumnId      String?
+  phone               String
+  name                String?
+  email               String?
+  tags                String[] @default([])
+  botEnabled          Boolean  @default(true)
+  currentNodeId       String?
+  activeBotFlowId     String?
+  flowState           Json?
+  lastMessageAt       DateTime?
+  notes               String?  @db.Text
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  whatsAppInstance WhatsAppInstance? @relation(fields: [whatsAppInstanceId], references: [id], onDelete: SetNull)
+  kanbanColumn     KanbanColumn?     @relation(fields: [kanbanColumnId], references: [id], onDelete: SetNull)
+  activeBotFlow    BotFlow?          @relation(fields: [activeBotFlowId], references: [id], onDelete: SetNull)
+  chatMessages     ChatMessage[]
+  orders           Order[]
+  campaignContacts CampaignContact[]
+
+  @@unique([tenantId, phone])
+  @@index([tenantId])
+  @@index([kanbanColumnId])
+  @@index([whatsAppInstanceId])
+  @@index([lastMessageAt])
+  @@map("contacts")
+}
+
+model ChatMessage {
+  id                 String               @id @default(cuid())
+  tenantId           String
+  contactId          String
+  whatsAppInstanceId String?
+  direction          ChatMessageDirection
+  status             ChatMessageStatus    @default(PENDING)
+  content            String?              @db.Text
+  mediaUrl           String?
+  mediaMimeType      String?
+  whatsAppMessageId  String?
+  metadata           Json?
+  sentAt             DateTime?
+  deliveredAt        DateTime?
+  readAt             DateTime?
+  createdAt          DateTime             @default(now())
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact          Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  whatsAppInstance WhatsAppInstance? @relation(fields: [whatsAppInstanceId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, contactId, createdAt])
+  @@index([whatsAppMessageId])
+  @@map("chat_messages")
+}
+
+// ─── Bot builder ─────────────────────────────────────────────────────────────
+
+model BotFlow {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  whatsAppInstanceId String?
+  name               String
+  description        String?
+  nodes              Json
+  edges              Json
+  version            Int      @default(1)
+  isActive           Boolean  @default(false)
+  isPublished        Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  whatsAppInstance WhatsAppInstance? @relation(fields: [whatsAppInstanceId], references: [id], onDelete: SetNull)
+  activeContacts   Contact[]
+
+  @@index([tenantId])
+  @@index([whatsAppInstanceId])
+  @@map("bot_flows")
+}
+
+/// Global templates (tenantId = null, managed by SUPERADMIN) or tenant-owned clones.
+model FlowTemplate {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  name        String
+  description String?
+  category    String?
+  nodes       Json
+  edges       Json
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([isPublic])
+  @@map("flow_templates")
+}
+
+// ─── E-commerce ──────────────────────────────────────────────────────────────
+
+model Product {
+  id          String        @id @default(cuid())
+  tenantId    String
+  source      ProductSource @default(SHEETS)
+  externalId  String?
+  sku         String?
+  name        String
+  description String?       @db.Text
+  price       Decimal       @db.Decimal(12, 2)
+  currency    String        @default("PEN")
+  imageUrl    String?
+  isActive    Boolean       @default(true)
+  metadata    Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, sku])
+  @@index([tenantId])
+  @@index([source])
+  @@map("products")
+}
+
+model Order {
+  id              String             @id @default(cuid())
+  tenantId        String
+  contactId       String
+  status          OrderStatus        @default(DRAFT)
+  paymentStatus   OrderPaymentStatus @default(PENDING)
+  items           Json
+  subtotal        Decimal            @db.Decimal(12, 2)
+  shippingCost    Decimal            @default(0) @db.Decimal(12, 2)
+  total           Decimal            @db.Decimal(12, 2)
+  currency        String             @default("PEN")
+  cashOnDelivery  Boolean            @default(false)
+  deliveryAddress String?
+  // PostGIS-ready: replace with geography(Point, 4326) via raw migration when extension is enabled
+  // deliveryLocation geography(Point, 4326)
+  deliveryLat     Float?
+  deliveryLng     Float?
+  mercadoPagoId   String?
+  notes           String?            @db.Text
+  confirmedAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([contactId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+// ─── Knowledge / RAG (pgvector) ──────────────────────────────────────────────
+
+model KnowledgeDocument {
+  id        String                  @id @default(cuid())
+  tenantId  String
+  title     String
+  sourceUrl String?
+  mimeType  String?
+  status    KnowledgeDocumentStatus @default(PENDING)
+  metadata  Json?
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  chunks KnowledgeChunk[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("knowledge_documents")
+}
+
+model KnowledgeChunk {
+  id         String @id @default(cuid())
+  tenantId   String
+  documentId String
+  content    String @db.Text
+  tokenCount Int?
+  chunkIndex Int    @default(0)
+  // pgvector: enable extension then migrate column to vector(1536)
+  // embedding vector(1536)
+  embedding  Unsupported("vector(1536)")?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([documentId])
+  @@map("knowledge_chunks")
+}
+
+// ─── Marketing ───────────────────────────────────────────────────────────────
+
+model Campaign {
+  id                 String          @id @default(cuid())
+  tenantId           String
+  whatsAppInstanceId String?
+  name               String
+  channel            CampaignChannel
+  status             CampaignStatus  @default(DRAFT)
+  messageTemplate    String          @db.Text
+  metaTemplateName   String?
+  scheduledAt        DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  totalContacts      Int             @default(0)
+  sentCount          Int             @default(0)
+  failedCount        Int             @default(0)
+  metadata           Json?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  whatsAppInstance WhatsAppInstance? @relation(fields: [whatsAppInstanceId], references: [id], onDelete: SetNull)
+  contacts         CampaignContact[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([channel])
+  @@map("campaigns")
+}
+
+model CampaignContact {
+  id         String                @id @default(cuid())
+  tenantId   String
+  campaignId String
+  contactId  String
+  status     CampaignContactStatus @default(PENDING)
+  sentAt     DateTime?
+  error      String?
+  createdAt  DateTime              @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact  Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, contactId])
+  @@index([tenantId])
+  @@index([campaignId, status])
+  @@map("campaign_contacts")
+}
+
+// ─── Payments (tenant MP credentials, encrypted at app layer) ────────────────
+
+model TenantPaymentConfig {
+  id                    String   @id @default(cuid())
+  tenantId              String   @unique
+  encryptedAccessToken  String   @db.Text
+  encryptedPublicKey    String   @db.Text
+  isActive              Boolean  @default(true)
+  lastRotatedAt         DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_payment_configs")
+}
+
+// ─── Warmup P2P ──────────────────────────────────────────────────────────────
+
+model WarmupConfig {
+  id                      String   @id @default(cuid())
+  tenantId                String
+  whatsAppInstanceId      String   @unique
+  joinWarmupNetwork       Boolean  @default(false)
+  manualDestinationPhones String[] @default([])
+  messageTemplates        Json?
+  dailyMessageLimit       Int      @default(10)
+  schedule                Json?
+  isActive                Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  whatsAppInstance WhatsAppInstance @relation(fields: [whatsAppInstanceId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("warmup_configs")
+}
+
+model WarmupLog {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  sourceInstanceId      String
+  destinationInstanceId String?
+  destinationPhone      String?
+  messageHash           String
+  composingDurationMs   Int?
+  sentAt                DateTime @default(now())
+
+  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sourceInstance      WhatsAppInstance  @relation("WarmupLogSource", fields: [sourceInstanceId], references: [id], onDelete: Cascade)
+  destinationInstance WhatsAppInstance? @relation("WarmupLogDestination", fields: [destinationInstanceId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, sentAt])
+  @@index([sourceInstanceId])
+  @@map("warmup_logs")
+}
+
+// ─── Audit ───────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String           @id @default(cuid())
+  tenantId   String?
+  userId     String?
+  action     String
+  entityType String?
+  entityId   String?
+  severity   AuditLogSeverity @default(INFO)
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime         @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([userId])
+  @@index([action])
+  @@map("audit_logs")
+}
