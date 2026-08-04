@@ -1,6 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
-  "installCommand": "bash -c 'if [ -f apps/web-crm/package.json ]; then bun install; else cd ../.. && bun install; fi'",
-  "buildCommand": "bash -c 'if [ -f apps/web-crm/package.json ]; then bun run --filter @uniwai/web-crm build; else cd ../.. && bun run --filter @uniwai/web-crm build; fi'"
-}
