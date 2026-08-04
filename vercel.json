@@ -1,7 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "rootDirectory": "apps/web-crm",
   "installCommand": "cd ../.. && bun install",
   "buildCommand": "cd ../.. && bun run --filter @uniwai/web-crm build"
 }
