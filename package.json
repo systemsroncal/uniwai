@@ -5,7 +5,7 @@
   "description": "UniWai CRM — SaaS omnicanal multi-tenant para WhatsApp",
   "packageManager": "bun@1.3.14",
   "engines": {
-    "node": ">=20"
+    "node": "20.x"
   },
   "workspaces": [
     "packages/*",
@@ -54,6 +54,11 @@
     "stack:shortcuts": "powershell -ExecutionPolicy Bypass -File scripts/desktop/install-shortcuts.ps1",
     "stack:auto-down:on": "node scripts/stack-auto-down.mjs on",
     "stack:auto-down:off": "node scripts/stack-auto-down.mjs off"
+  },
+  "dependencies": {
+    "next": "^15.5.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@prisma/client": "^6.19.3",
