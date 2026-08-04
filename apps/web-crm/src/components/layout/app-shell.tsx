@@ -1,70 +1,24 @@
 "use client";
 
-import { useEffect } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import {
-  Bot,
-  KanbanSquare,
-  LayoutDashboard,
-  LogOut,
-  MessageSquare,
-  Settings,
-  Shield,
-  Users,
-} from "lucide-react";
-import { Permission, Role } from "@uniwai/shared";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Box, CircularProgress, Container, useMediaQuery, useTheme } from "@mui/material";
 import { useAuth } from "@/src/context/auth-context";
-import { Button } from "@/src/components/ui/button";
-
-type NavItem = {
-  href: string;
-  label: string;
-  icon: typeof LayoutDashboard;
-  roles?: Role[];
-  permission?: Permission;
-};
-
-const links: NavItem[] = [
-  { href: "/app", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/app/kanban", label: "Kanban", icon: KanbanSquare, permission: Permission.VIEW_KANBAN },
-  { href: "/app/inbox", label: "Inbox", icon: MessageSquare, permission: Permission.MANAGE_CHAT },
-  {
-    href: "/app/builder",
-    label: "Bot Builder",
-    icon: Bot,
-    permission: Permission.MANAGE_FLOWS,
-  },
-  {
-    href: "/app/team",
-    label: "Equipo",
-    icon: Users,
-    permission: Permission.MANAGE_TEAM,
-  },
-  {
-    href: "/app/settings",
-    label: "Configuración",
-    icon: Settings,
-    roles: [Role.OWNER],
-  },
-  {
-    href: "/app/admin",
-    label: "Superadmin",
-    icon: Shield,
-    roles: [Role.SUPERADMIN],
-  },
-];
+import { DashboardHeader } from "@/src/components/layout/dashboard-header";
+import { DashboardSidebar } from "@/src/components/layout/dashboard-sidebar";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
   const router = useRouter();
-  const { loading, crmUser, tenantName, planSlug, signOut, can } = useAuth();
+  const { loading, crmUser } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up("lg"));
 
-  const visibleLinks = links.filter((item) => {
-    if (item.roles && crmUser && !item.roles.includes(crmUser.role as Role)) return false;
-    if (item.permission && !can(item.permission)) return false;
-    return true;
-  });
+  function handleMenuToggle() {
+    if (isDesktop) setSidebarOpen((o) => !o);
+    else setMobileOpen((o) => !o);
+  }
 
   useEffect(() => {
     if (!loading && !crmUser) {
@@ -74,65 +28,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center text-secondary">
-        Cargando sesión…
-      </div>
+      <Box
+        sx={{
+          minHeight: "100dvh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          bgcolor: "background.default",
+        }}
+      >
+        <CircularProgress aria-label="Cargando sesión" />
+      </Box>
     );
   }
 
   if (!crmUser) return null;
 
   return (
-    <div className="min-h-dvh bg-background text-foreground">
-      <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6 md:px-6">
-        <aside className="hidden w-60 shrink-0 md:block">
-          <div className="mb-2 text-lg font-semibold text-primary">
-            UniWai<span className="text-accent">CRM</span>
-          </div>
-          {tenantName ? (
-            <p className="mb-1 truncate text-xs font-medium text-primary">{tenantName}</p>
-          ) : (
-            <p className="mb-1 text-xs font-medium text-accent">Modo plataforma</p>
-          )}
-          <p className="mb-6 text-xs text-secondary">
-            {crmUser.role}
-            {planSlug ? ` · ${planSlug}` : ""}
-          </p>
+    <Box sx={{ display: "flex", minHeight: "100dvh", bgcolor: "background.default" }}>
+      <DashboardSidebar
+        desktopOpen={sidebarOpen}
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+      />
 
-          <nav className="space-y-1" aria-label="CRM">
-            {visibleLinks.map(({ href, label, icon: Icon }) => {
-              const active = pathname === href;
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={`flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-primary text-white"
-                      : "text-secondary hover:bg-muted hover:text-primary"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" aria-hidden />
-                  {label}
-                </Link>
-              );
-            })}
-          </nav>
+      <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+        <DashboardHeader onMenuClick={handleMenuToggle} />
 
-          <div className="mt-8 border-t border-border pt-4">
-            <p className="mb-2 truncate text-xs text-secondary">{crmUser.email}</p>
-            <Button
-              variant="outline"
-              className="min-h-11 w-full justify-start gap-2"
-              onClick={() => void signOut()}
-            >
-              <LogOut className="h-4 w-4" aria-hidden />
-              Cerrar sesión
-            </Button>
-          </div>
-        </aside>
-        <main className="min-w-0 flex-1">{children}</main>
-      </div>
-    </div>
+        <Box component="main" sx={{ flex: 1, py: { xs: 2, md: 3 }, px: { xs: 2, md: 3 } }}>
+          <Container maxWidth="xl" disableGutters>
+            {children}
+          </Container>
+        </Box>
+      </Box>
+    </Box>
   );
 }

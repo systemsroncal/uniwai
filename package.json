@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "description": "UniWai CRM — SaaS omnicanal multi-tenant para WhatsApp",
+  "packageManager": "bun@1.3.14",
+  "engines": {
+    "node": ">=20"
+  },
   "workspaces": [
     "packages/*",
     "apps/*",
@@ -12,8 +16,13 @@
     "dev": "bun run dev:web",
     "dev:landing": "bun run --filter @uniwai/web-crm dev",
     "dev:api": "bun run --filter @uniwai/api-core dev",
+    "dev:api:stack": "bun run --filter @uniwai/api-core dev:stack",
     "dev:web": "bun run --filter @uniwai/web-crm dev",
+    "dev:web:stack": "bun run --filter @uniwai/web-crm dev:stack",
+    "dev:web:start": "bun run --filter @uniwai/web-crm start:stack",
+    "build:web": "bun run --filter @uniwai/web-crm build:stack",
     "dev:worker": "bun run --filter @uniwai/wa-worker dev",
+    "dev:worker:stack": "bun run --filter @uniwai/wa-worker start",
     "dev:db": "bun run --filter @uniwai/database db:generate",
     "build": "bun run --filter @uniwai/web-crm build",
     "typecheck:api": "bun run --filter @uniwai/api-core typecheck",
@@ -23,6 +32,9 @@
     "typecheck": "bun run typecheck:api && bun run typecheck:web && bun run typecheck:worker && bun run typecheck:packages",
     "db:generate": "bun run --filter @uniwai/database db:generate",
     "db:seed": "bun run --filter @uniwai/database db:seed",
+    "db:seed:demo": "node scripts/seed-demo.mjs",
+    "db:purge:demo": "node scripts/purge-demo-data.mjs",
+    "db:fix:lid": "bun scripts/fix-lid-contacts.mjs",
     "supabase:start": "npx supabase start",
     "supabase:stop": "npx supabase stop",
     "supabase:status": "npx supabase status",
@@ -30,11 +42,23 @@
     "env:sync": "node scripts/sync-supabase-env.mjs",
     "setup:local": "bun install && bun run supabase:start && bun run env:sync",
     "setup:db": "bun run env:sync && bun run db:generate && bun run --filter @uniwai/database db:push && bun run db:seed",
-    "bootstrap:dev": "bun scripts/bootstrap-dev.mjs"
+    "bootstrap:dev": "bun scripts/bootstrap-dev.mjs",
+    "stack": "node scripts/stack.mjs",
+    "stack:down": "node scripts/stack.mjs down",
+    "stack:probar": "node scripts/stack.mjs probar",
+    "stack:web": "node scripts/stack-restart-web.mjs",
+    "stack:desarrollar": "node scripts/stack.mjs desarrollar",
+    "stack:dev": "node scripts/stack.mjs desarrollar",
+    "stack:full": "node scripts/stack.mjs full",
+    "stack:status": "node scripts/stack.mjs status",
+    "stack:shortcuts": "powershell -ExecutionPolicy Bypass -File scripts/desktop/install-shortcuts.ps1",
+    "stack:auto-down:on": "node scripts/stack-auto-down.mjs on",
+    "stack:auto-down:off": "node scripts/stack-auto-down.mjs off"
   },
   "devDependencies": {
     "@prisma/client": "^6.19.3",
     "@supabase/supabase-js": "^2.110.0",
+    "marked": "^18.0.5",
     "typescript": "^5.8.3"
   }
 }

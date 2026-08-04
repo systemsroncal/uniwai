@@ -11,6 +11,20 @@ loadEnvLocal();
 
 const prisma = new PrismaClient();
 
+async function waitForDatabase(maxAttempts = 12, delayMs = 5000) {
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      console.log("[bootstrap] Base de datos disponible.");
+      return;
+    } catch {
+      console.warn(`[bootstrap] DB no lista (intento ${i}/${maxAttempts}), reintentando…`);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw new Error("DATABASE_URL no responde. Ejecuta: npx supabase start --ignore-health-check");
+}
+
 const SUPERADMIN_EMAIL = process.env.DEV_SUPERADMIN_EMAIL ?? "superadmin@uniwai.dev";
 const SUPERADMIN_PASSWORD = process.env.DEV_SUPERADMIN_PASSWORD ?? "SuperAdmin123!";
 
@@ -185,8 +199,22 @@ async function main() {
     process.exit(1);
   }
 
+  await waitForDatabase();
   await seedPlans();
   await ensureSuperadmin();
+  try {
+    const { spawn } = await import("node:child_process");
+    await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, ["scripts/seed-demo.mjs"], {
+        stdio: "inherit",
+        cwd: process.cwd(),
+        env: { ...process.env, SEED_DEMO_SKIP_SAMPLE_DATA: "1" },
+      });
+      child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`seed-demo exit ${code}`))));
+    });
+  } catch (err) {
+    console.warn("[bootstrap] seed-demo omitido o falló:", err.message);
+  }
 }
 
 main()

@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "UniWai: Modo desarrollo (stack:desarrollar)",
+      "type": "shell",
+      "command": "bun run stack:desarrollar",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "UniWai: Modo prueba (stack:probar)",
+      "type": "shell",
+      "command": "bun run stack:probar",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "UniWai: Apagar todo (stack:down)",
+      "type": "shell",
+      "command": "bun run stack:down",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "UniWai: Estado (stack:status)",
+      "type": "shell",
+      "command": "bun run stack:status",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "UniWai: WhatsApp (stack:full)",
+      "type": "shell",
+      "command": "bun run stack:full",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    }
+  ]
+}

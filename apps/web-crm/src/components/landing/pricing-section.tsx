@@ -78,7 +78,7 @@ export function PricingSection() {
                 ))}
               </ul>
 
-              <Link href="/app" className="mt-6 block">
+              <Link href="/register" className="mt-6 block">
                 <Button
                   variant={highlighted ? "outline" : "default"}
                   className={`min-h-11 w-full ${
@@ -101,7 +101,7 @@ export function PricingSection() {
           Plan Custom con white label, SLA, límites negociables e implementación asistida para agencias y
           corporativos.
         </p>
-        <Link href="/app" className="mt-4 inline-block">
+        <Link href="/register" className="mt-4 inline-block">
           <Button variant="outline" className="min-h-11">
             Solicitar cotización Custom
           </Button>

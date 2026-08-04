@@ -3,10 +3,10 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Alert, Button, CircularProgress, Stack, TextField, Typography } from "@mui/material";
 import { createClient } from "@/src/lib/supabase/client";
 import { apiFetch } from "@/src/lib/api";
-import { Button } from "@/src/components/ui/button";
-import { Input } from "@/src/components/ui/input";
+import { AuthCardLayout, AuthPageShell } from "@/src/components/auth/auth-card-layout";
 
 function RegisterForm() {
   const router = useRouter();
@@ -39,16 +39,10 @@ function RegisterForm() {
       const supabase = createClient();
 
       if (!provisionOnly) {
-        const { error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-        });
+        const { error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) throw signUpError;
 
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
       }
 
@@ -63,78 +57,85 @@ function RegisterForm() {
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-semibold text-primary">
-          {provisionOnly ? "Completa tu negocio" : "Crear cuenta"}
-        </h1>
-        <p className="mt-1 text-sm text-secondary">
-          {provisionOnly
+    <AuthPageShell>
+      <AuthCardLayout
+        title={provisionOnly ? "Completa tu negocio" : "Crear cuenta"}
+        subtitle={
+          provisionOnly
             ? "Configura tu tenant para empezar con el plan Básico."
-            : "Regístrate como dueño de negocio y activa tu CRM."}
-        </p>
-
-        <form onSubmit={onSubmit} className="mt-6 space-y-4">
+            : "Regístrate como dueño de negocio y activa tu CRM."
+        }
+        footer={
+          <Typography variant="body2" color="text.secondary" textAlign="center">
+            ¿Ya tienes cuenta?{" "}
+            <Link href="/login" style={{ color: "inherit", fontWeight: 600 }}>
+              Iniciar sesión
+            </Link>
+          </Typography>
+        }
+      >
+        <Stack component="form" onSubmit={onSubmit} spacing={2.5}>
           {!provisionOnly ? (
             <>
-              <Input
+              <TextField
                 label="Correo electrónico"
                 name="email"
                 type="email"
                 autoComplete="email"
                 required
+                fullWidth
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
-              <Input
+              <TextField
                 label="Contraseña"
                 name="password"
                 type="password"
                 autoComplete="new-password"
                 required
-                minLength={8}
+                fullWidth
+                inputProps={{ minLength: 8 }}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </>
           ) : null}
-          <Input
+          <TextField
             label="Nombre del negocio"
             name="businessName"
             required
+            fullWidth
             value={businessName}
             onChange={(e) => setBusinessName(e.target.value)}
           />
-          <Input
+          <TextField
             label="Tu nombre"
             name="ownerName"
+            fullWidth
             value={ownerName}
             onChange={(e) => setOwnerName(e.target.value)}
           />
-          {error ? (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <Button type="submit" className="min-h-11 w-full" disabled={loading}>
+          {error ? <Alert severity="error">{error}</Alert> : null}
+          <Button type="submit" variant="contained" size="large" fullWidth disabled={loading}>
             {loading ? "Creando…" : provisionOnly ? "Activar CRM" : "Crear cuenta"}
           </Button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-secondary">
-          ¿Ya tienes cuenta?{" "}
-          <Link href="/login" className="font-medium text-accent hover:underline">
-            Iniciar sesión
-          </Link>
-        </p>
-      </div>
-    </main>
+        </Stack>
+      </AuthCardLayout>
+    </AuthPageShell>
   );
 }
 
 export default function RegisterPage() {
   return (
-    <Suspense fallback={<div className="p-10 text-center text-secondary">Cargando…</div>}>
+    <Suspense
+      fallback={
+        <AuthPageShell>
+          <Stack alignItems="center" justifyContent="center" sx={{ minHeight: "50dvh" }}>
+            <CircularProgress />
+          </Stack>
+        </AuthPageShell>
+      }
+    >
       <RegisterForm />
     </Suspense>
   );

@@ -4,11 +4,18 @@
   "private": true,
   "scripts": {
     "dev": "bun --env-file=../../.env.local next dev --port 3000",
+    "dev:stack": "bun --env-file=../../.env.local next dev --port 3000 --turbopack",
+    "build:stack": "bun --env-file=../../.env.local next build",
+    "start:stack": "bun --env-file=../../.env.local next start -p 3000",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.1",
+    "@mui/material": "^7.3.1",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.0",
     "@uniwai/shared": "workspace:*",

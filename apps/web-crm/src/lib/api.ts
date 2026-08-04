@@ -28,25 +28,93 @@ export async function apiFetch<T>(
     throw new ApiError("Sesión no válida", 401);
   }
 
-  const response = await fetch(`${API_URL}/api/v1${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(init?.headers ?? {}),
-    },
-  });
+  const impersonateTenantId =
+    typeof window !== "undefined" ? localStorage.getItem("uniwai-impersonate-tenant-id") : null;
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/api/v1${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        ...(impersonateTenantId ? { "X-Tenant-Id": impersonateTenantId } : {}),
+        ...(init?.headers ?? {}),
+      },
+    });
+  } catch {
+    throw new ApiError(
+      "API no disponible. Ejecuta bun run stack:probar en la terminal del proyecto.",
+      0,
+      "NETWORK_ERROR",
+    );
+  }
 
   const body = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    const errBody = (body as { error?: unknown; message?: string; code?: string }).error;
+    let message = "Error de API";
+    if (typeof errBody === "string" && errBody.trim()) {
+      message = errBody;
+    } else if (typeof (body as { message?: string }).message === "string") {
+      message = (body as { message: string }).message;
+    } else if (errBody && typeof errBody === "object") {
+      const nested = (errBody as { message?: string }).message;
+      message = typeof nested === "string" && nested.trim() ? nested : "Error de API";
+    }
     throw new ApiError(
-      (body as { error?: string }).error ?? "Error de API",
+      message,
       response.status,
       (body as { code?: string }).code,
     );
   }
 
+  return body as T;
+}
+
+export async function apiFetchBlob(path: string, init?: RequestInit): Promise<Blob> {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError("Sesión no válida", 401);
+
+  const impersonateTenantId =
+    typeof window !== "undefined" ? localStorage.getItem("uniwai-impersonate-tenant-id") : null;
+
+  const response = await fetch(`${API_URL}/api/v1${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(impersonateTenantId ? { "X-Tenant-Id": impersonateTenantId } : {}),
+      ...(init?.headers ?? {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new ApiError("Error al descargar archivo", response.status);
+  }
+  return response.blob();
+}
+
+export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError("Sesión no válida", 401);
+
+  const impersonateTenantId =
+    typeof window !== "undefined" ? localStorage.getItem("uniwai-impersonate-tenant-id") : null;
+
+  const response = await fetch(`${API_URL}/api/v1${path}`, {
+    method: "POST",
+    body: formData,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(impersonateTenantId ? { "X-Tenant-Id": impersonateTenantId } : {}),
+    },
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new ApiError((body as { error?: string }).error ?? "Error de subida", response.status);
+  }
   return body as T;
 }
 
@@ -101,4 +169,12 @@ export type ContactRow = {
   botEnabled: boolean;
   currentNodeId: string | null;
   lastMessageAt: string | null;
+  whatsAppInstanceId?: string | null;
+  lastMessage?: {
+    id: string;
+    content: string | null;
+    direction: string;
+    createdAt: string;
+    status: string;
+  } | null;
 };

@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <title>UniWai CRM — Análisis Técnico</title>
+  <title>UniWai CRM — Análisis Técnico v3.0</title>
   <style>
 @media print { body { margin: 0; } h1, h2, h3 { page-break-after: avoid; } }
 body { font-family: "Segoe UI", system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1.5rem; line-height: 1.6; color: #1a1a1a; }
@@ -21,10 +21,10 @@ blockquote { border-left: 4px solid #2563eb; margin: 1rem 0; padding-left: 1rem;
 </head>
 <body>
   <div class="print-hint">
-    <strong>Exportar a PDF:</strong> Ctrl+P → Destino: &quot;Guardar como PDF&quot; → Guardar.
+    <strong>Exportar a PDF:</strong> Ctrl+P → Destino: &quot;Guardar como PDF&quot;
   </div>
   <h1>UniWai CRM — Especificación Técnica y Análisis de Arquitectura</h1>
-<p><strong>Producto:</strong> UniWai CRM (Enterprise Edition)<br><strong>Repositorio:</strong> <a href="https://github.com/systemsroncal/uniwai.git"><code>systemsroncal/uniwai</code></a><br><strong>Dominios proyectados:</strong> uniwaicrm.com · uniwai.com · uniwai.pe<br><strong>Versión del documento:</strong> 2.0<br><strong>Fecha:</strong> 2026-07-02<br><strong>Estado:</strong> En revisión — decisiones parciales aprobadas (ver §0.1)<br><strong>Autor:</strong> Sesión de diseño Superpowers (brainstorming)</p>
+<p><strong>Producto:</strong> UniWai CRM (Enterprise Edition)<br><strong>Repositorio:</strong> <a href="https://github.com/systemsroncal/uniwai.git"><code>systemsroncal/uniwai</code></a><br><strong>Dominios proyectados:</strong> uniwaicrm.com · uniwai.com · uniwai.pe<br><strong>Versión del documento:</strong> 3.0<br><strong>Fecha:</strong> 2026-07-02 (actualizado)<br><strong>Estado:</strong> Análisis v3.0 — Fases 0–9 en progreso avanzado (ver §1.1)<br><strong>Autor:</strong> Sesión de diseño Superpowers + auditoría de código UniWai</p>
 <hr>
 <h2>0. Linaje documental</h2>
 <p>Este spec <strong>unifica</strong> tres fuentes:</p>
@@ -103,6 +103,83 @@ blockquote { border-left: 4px solid #2563eb; margin: 1rem 0; padding-left: 1rem;
 </ul>
 <p><strong>Decisión arquitectónica clave:</strong> Monorepo con separación clara entre UI (Next.js), API (Hono/Bun), workers (Baileys, BullMQ, warmup) y paquete compartido de base de datos (Prisma).</p>
 <p><strong>Advertencia legal/técnica:</strong> La conexión no oficial (Baileys) viola los Términos de Servicio de WhatsApp/Meta. El producto debe etiquetarlo explícitamente, ofrecer la API oficial como canal recomendado, y documentar riesgo de baneo permanente del número. Las funciones &quot;anti-ban&quot; reducen probabilidad pero <strong>no garantizan</strong> cumplimiento ni ausencia de baneos.</p>
+<h3>1.1 Estado de implementación (gap analysis v3.0 — 2026-07-03)</h3>
+<table>
+<thead>
+<tr>
+<th>Módulo / Fase</th>
+<th>Estado</th>
+<th>Notas</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>F0</strong> Monorepo, Prisma, Supabase, auth</td>
+<td>✅ Hecho</td>
+<td>Workspaces Bun, <code>bootstrap:dev</code>, RLS baseline</td>
+</tr>
+<tr>
+<td><strong>F1</strong> Meta Cloud API + inbox</td>
+<td>🟡 Parcial</td>
+<td>Adapter Meta en worker + inbox API; webhook Meta pendiente prod</td>
+</tr>
+<tr>
+<td><strong>F2</strong> Baileys + QR</td>
+<td>🟡 Parcial</td>
+<td>Worker Baileys, QR en Redis, UI escaneo; sesiones en <code>data/sessions</code></td>
+</tr>
+<tr>
+<td><strong>F3</strong> Bot Builder + executor</td>
+<td>🟡 Parcial</td>
+<td>Canvas React Flow + guardar/cargar API; executor runtime pendiente</td>
+</tr>
+<tr>
+<td><strong>F4</strong> Kanban + human takeover</td>
+<td>🟡 Parcial</td>
+<td>Tablero + panel prospecto + mensajes; toggle bot en API básico</td>
+</tr>
+<tr>
+<td><strong>F5</strong> Warmup P2P</td>
+<td>🟡 Parcial</td>
+<td>BullMQ repeat job, Spintax, WarmupLog, envío real si Baileys conectado</td>
+</tr>
+<tr>
+<td><strong>F6</strong> IA BYOK + RAG</td>
+<td>🟡 Parcial</td>
+<td>Embeddings (OpenAI o hash dev), búsqueda pgvector; anti-injection pendiente</td>
+</tr>
+<tr>
+<td><strong>F7</strong> E-commerce + PostGIS + MP</td>
+<td>🟡 Parcial</td>
+<td>Productos, pedidos, MP cifrado settings; PostGIS/geo tarifas pendiente</td>
+</tr>
+<tr>
+<td><strong>F8</strong> Planes, billing, superadmin</td>
+<td>✅ Mayoría</td>
+<td>Panel admin, planes, impersonación tenant, seed demo</td>
+</tr>
+<tr>
+<td><strong>F9</strong> Marketing + Excel</td>
+<td>🟡 Parcial</td>
+<td>Import Excel contactos, export exceljs 2 hojas; dispatcher campañas pendiente</td>
+</tr>
+<tr>
+<td><strong>F10</strong> Landing + hardening</td>
+<td>🟡 Parcial</td>
+<td>Landing producto + MUI Modernize light/dark; CSP prod pendiente</td>
+</tr>
+<tr>
+<td><strong>F11+</strong> MCP, omnicanal, plugins</td>
+<td>⬜ Roadmap</td>
+<td>Fuera de v1</td>
+</tr>
+</tbody></table>
+<p><strong>Seed demo:</strong> <code>bun run db:seed:demo</code> — tenant <em>Tienda Demo UniWai</em> (<code>owner@demo.uniwai.dev</code> / <code>DemoOwner123!</code>).</p>
+<p><strong>Comandos clave:</strong></p>
+<pre><code class="language-bash">bun run bootstrap:dev    # planes + superadmin + seed demo
+bun run dev:api          # :3001
+bun run dev:web          # :3000
+bun run dev:worker       # Baileys + warmup P2P (requiere REDIS_URL)
+</code></pre>
 <hr>
 <h2>2. Análisis competitivo (ChatPro y diferenciadores)</h2>
 <h3>2.1 Referencia: ChatPro (chatpro.pe)</h3>
@@ -937,7 +1014,7 @@ services:
 </tbody></table>
 <p><strong>Primer push:</strong> <code>git init</code> → commit spec + rules → <code>git remote add origin</code> → <code>git push -u origin main</code></p>
 <hr>
-<p><em>Documento UniWai CRM v2.0 — unifica WA-PRO-CRM base + SRS V3 enterprise. Pendiente de aprobación antes de escribir código.</em></p>
+<p><em>Documento UniWai CRM v3.0 — unifica WA-PRO-CRM base + SRS V3 enterprise. Actualizado con gap analysis de código en repo.</em></p>
 
 </body>
 </html>

@@ -16,5 +16,6 @@ export type AppBindings = {
   Variables: {
     authUser: AuthUser;
     supabaseUser: SupabaseUser;
+    impersonatedTenantId?: string;
   };
 };

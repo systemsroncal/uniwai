@@ -15,7 +15,7 @@ export const corsAllowlist: MiddlewareHandler = async (c, next) => {
 
   c.header("Vary", "Origin");
   c.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-  c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  c.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id");
   c.header("Access-Control-Allow-Credentials", "true");
 
   if (hasAllowedOrigin && origin) {

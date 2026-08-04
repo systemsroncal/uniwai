@@ -96,4 +96,62 @@ users.post("/", requirePermission(Permission.MANAGE_TEAM), async (c) => {
   return c.json({ data: user }, 201);
 });
 
+const updateUserSchema = z.object({
+  name: z.string().min(2).max(120).optional(),
+  isActive: z.boolean().optional(),
+});
+
+users.patch("/:userId", requirePermission(Permission.MANAGE_TEAM), async (c) => {
+  const tenantId = getTenantIdOrThrow(c);
+  const userId = c.req.param("userId");
+  const payload = updateUserSchema.parse(await c.req.json());
+
+  const existing = await prisma.user.findFirst({
+    where: { id: userId, tenantId },
+  });
+  if (!existing) return c.json({ error: "User not found" }, 404);
+  if (existing.role === Role.OWNER) {
+    return c.json({ error: "Cannot modify owner via this endpoint" }, 403);
+  }
+
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: {
+      ...(payload.name !== undefined ? { name: payload.name } : {}),
+      ...(payload.isActive !== undefined ? { isActive: payload.isActive } : {}),
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      isActive: true,
+      lastLoginAt: true,
+      createdAt: true,
+    },
+  });
+
+  return c.json({ data: user });
+});
+
+users.delete("/:userId", requirePermission(Permission.MANAGE_TEAM), async (c) => {
+  const tenantId = getTenantIdOrThrow(c);
+  const userId = c.req.param("userId");
+
+  const existing = await prisma.user.findFirst({
+    where: { id: userId, tenantId },
+  });
+  if (!existing) return c.json({ error: "User not found" }, 404);
+  if (existing.role === Role.OWNER) {
+    return c.json({ error: "Cannot delete owner" }, 403);
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { isActive: false },
+  });
+
+  return c.json({ data: { ok: true } });
+});
+
 export default users;

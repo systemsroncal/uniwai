@@ -3,8 +3,8 @@ import { Button } from "@/src/components/ui/button";
 
 const nav = [
   { href: "#features", label: "Funciones" },
+  { href: "#how-it-works", label: "Cómo funciona" },
   { href: "#pricing", label: "Planes" },
-  { href: "#security", label: "Seguridad" },
 ];
 
 export function SiteHeader() {

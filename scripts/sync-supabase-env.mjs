@@ -14,13 +14,13 @@ function parseEnvLines(content) {
       const idx = line.indexOf("=");
       if (idx <= 0) return acc;
       const key = line.slice(0, idx).trim();
-      const value = line.slice(idx + 1).trim();
+      const value = line.slice(idx + 1).trim().replace(/^["']|["']$/g, "");
       acc[key] = value;
       return acc;
     }, {});
 }
 
-const SUPABASE_LOCAL_URL = "http://127.0.0.1:54321";
+const SUPABASE_LOCAL_URL = "http://localhost:54321";
 const SUPABASE_LOCAL_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0";
 const SUPABASE_LOCAL_SERVICE_ROLE_KEY =
@@ -65,11 +65,11 @@ const merged = {
 if (merged.API_URL && !merged.SUPABASE_URL) {
   merged.SUPABASE_URL = merged.API_URL;
 }
-if (merged.ANON_KEY && !merged.SUPABASE_ANON_KEY) {
-  merged.SUPABASE_ANON_KEY = merged.ANON_KEY;
+if (merged.SERVICE_ROLE_KEY) {
+  merged.SUPABASE_SERVICE_ROLE_KEY = merged.SERVICE_ROLE_KEY.replace(/^["']|["']$/g, "");
 }
-if (merged.SERVICE_ROLE_KEY && !merged.SUPABASE_SERVICE_ROLE_KEY) {
-  merged.SUPABASE_SERVICE_ROLE_KEY = merged.SERVICE_ROLE_KEY;
+if (merged.ANON_KEY) {
+  merged.SUPABASE_ANON_KEY = merged.ANON_KEY.replace(/^["']|["']$/g, "");
 }
 
 if (!merged.NEXT_PUBLIC_SUPABASE_URL && merged.SUPABASE_URL) {

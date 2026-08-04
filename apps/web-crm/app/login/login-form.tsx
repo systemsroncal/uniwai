@@ -3,9 +3,31 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Alert, Button, Stack, TextField, Typography } from "@mui/material";
 import { createClient } from "@/src/lib/supabase/client";
-import { Button } from "@/src/components/ui/button";
-import { Input } from "@/src/components/ui/input";
+import { AuthCardLayout, AuthPageShell } from "@/src/components/auth/auth-card-layout";
+
+function formatAuthError(err: { message?: unknown; msg?: unknown; code?: string; status?: number }): string {
+  if (err.status === 504 || err.status === 502 || err.status === 503) {
+    return "Supabase local no responde (timeout). Reinicia Docker Desktop, espera 1–2 min y vuelve a intentar.";
+  }
+
+  const raw = err.message ?? err.msg;
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (/504|gateway timeout|fetch failed|network/i.test(trimmed)) {
+      return "Supabase local no responde. Verifica que Docker esté activo y el stack «uniwai-crm» en verde.";
+    }
+    if (trimmed && trimmed !== "{}") return trimmed;
+  }
+  if (typeof raw === "object" && raw !== null) {
+    const nested = (raw as { message?: unknown; msg?: unknown }).message ?? (raw as { msg?: unknown }).msg;
+    if (typeof nested === "string" && nested.trim()) return nested.trim();
+  }
+  if (err.code === "invalid_credentials") return "Correo o contraseña incorrectos.";
+  if (err.code === "email_not_confirmed") return "Confirma tu correo antes de entrar.";
+  return "No se pudo iniciar sesión. Verifica credenciales y que Supabase esté corriendo.";
+}
 
 export default function LoginForm() {
   const router = useRouter();
@@ -23,7 +45,7 @@ export default function LoginForm() {
     setLoading(true);
 
     const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -31,7 +53,12 @@ export default function LoginForm() {
     setLoading(false);
 
     if (signInError) {
-      setError(signInError.message);
+      setError(formatAuthError(signInError));
+      return;
+    }
+
+    if (!data.session) {
+      setError("La sesión no se guardó. Recarga la página (Ctrl+Shift+R) e inténtalo de nuevo.");
       return;
     }
 
@@ -40,47 +67,46 @@ export default function LoginForm() {
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-semibold text-primary">Iniciar sesión</h1>
-        <p className="mt-1 text-sm text-secondary">Accede a tu workspace UniWai CRM.</p>
-
-        <form onSubmit={onSubmit} className="mt-6 space-y-4">
-          <Input
+    <AuthPageShell>
+      <AuthCardLayout
+        title="Iniciar sesión"
+        subtitle="Accede a tu workspace UniWai CRM."
+        footer={
+          <Typography variant="body2" color="text.secondary" textAlign="center">
+            ¿No tienes cuenta?{" "}
+            <Link href="/register" style={{ color: "inherit", fontWeight: 600 }}>
+              Crear cuenta
+            </Link>
+          </Typography>
+        }
+      >
+        <Stack component="form" onSubmit={onSubmit} spacing={2.5}>
+          <TextField
             label="Correo electrónico"
             name="email"
             type="email"
             autoComplete="email"
             required
+            fullWidth
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <Input
+          <TextField
             label="Contraseña"
             name="password"
             type="password"
             autoComplete="current-password"
             required
+            fullWidth
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          {error ? (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <Button type="submit" className="min-h-11 w-full" disabled={loading}>
+          {error ? <Alert severity="error">{error}</Alert> : null}
+          <Button type="submit" variant="contained" size="large" fullWidth disabled={loading}>
             {loading ? "Entrando…" : "Entrar"}
           </Button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-secondary">
-          ¿No tienes cuenta?{" "}
-          <Link href="/register" className="font-medium text-accent hover:underline">
-            Crear cuenta
-          </Link>
-        </p>
-      </div>
-    </main>
+        </Stack>
+      </AuthCardLayout>
+    </AuthPageShell>
   );
 }

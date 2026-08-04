@@ -13,7 +13,10 @@
     "@whiskeysockets/baileys": "^6.7.18",
     "bullmq": "^5.56.0",
     "dotenv": "^16.6.1",
-    "ioredis": "^5.7.0"
+    "ioredis": "^5.7.0",
+    "@hapi/boom": "^10.0.1",
+    "@uniwai/database": "workspace:*",
+    "@uniwai/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",

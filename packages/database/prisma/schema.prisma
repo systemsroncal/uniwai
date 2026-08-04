@@ -179,6 +179,7 @@ model Tenant {
   campaigns           Campaign[]
   campaignContacts    CampaignContact[]
   paymentConfig       TenantPaymentConfig?
+  aiConfig            TenantAiConfig?
   warmupConfigs       WarmupConfig[]
   warmupLogs          WarmupLog[]
   auditLogs           AuditLog[]
@@ -560,6 +561,24 @@ model TenantPaymentConfig {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("tenant_payment_configs")
+}
+
+model TenantAiConfig {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  defaultProvider String   @default("openai")
+  encryptedOpenaiKey    String? @db.Text
+  encryptedGeminiKey    String? @db.Text
+  encryptedDeepseekKey  String? @db.Text
+  encryptedNvidiaKey    String? @db.Text
+  googleSheetUrl        String?
+  googleSheetGid        String?  @default("0")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_ai_configs")
 }
 
 // ─── Warmup P2P ──────────────────────────────────────────────────────────────

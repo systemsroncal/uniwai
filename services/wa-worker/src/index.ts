@@ -1,56 +1,46 @@
-import "dotenv/config";
+import "./load-env.js";
+import { createRedis } from "./redis.js";
 import {
   createWarmupQueue,
   createWarmupWorker,
-  WARMUP_SIMULATE_JOB_NAME
-} from "./queues/warmup";
+  scheduleWarmupJobs,
+} from "./queues/warmup.js";
+import { startInstancePoller } from "./managers/instance-poller.js";
+import { startOutboundPoller } from "./managers/outbound-poller.js";
 
 function getRedisUrl(): string {
   const redisUrl = process.env.REDIS_URL?.trim();
-
   if (!redisUrl) {
-    throw new Error(
-      "Missing REDIS_URL environment variable. Set REDIS_URL to start @uniwai/wa-worker."
-    );
+    throw new Error("Missing REDIS_URL. Set REDIS_URL to start @uniwai/wa-worker.");
   }
-
   return redisUrl;
 }
 
 async function bootstrap(): Promise<void> {
   const redisUrl = getRedisUrl();
+  const redis = createRedis();
   const queue = createWarmupQueue(redisUrl);
   const worker = createWarmupWorker(redisUrl);
 
   worker.on("completed", (job) => {
-    console.log(`[warmup] Job completed: ${job.name} (${job.id ?? "no-id"})`);
+    console.log(`[worker] OK ${job.name} (${job.id ?? "?"})`);
   });
 
   worker.on("failed", (job, error) => {
-    console.error(
-      `[warmup] Job failed: ${job?.name ?? "unknown"} (${job?.id ?? "no-id"})`,
-      error
-    );
+    console.error(`[worker] FAIL ${job?.name}`, error);
   });
 
-  await queue.add(
-    WARMUP_SIMULATE_JOB_NAME,
-    {
-      contactId: "demo-contact",
-      message: "Hola, este es un warmup simulado."
-    },
-    {
-      removeOnComplete: true,
-      removeOnFail: 20
-    }
-  );
+  startInstancePoller(redis);
+  startOutboundPoller(redis);
+  await scheduleWarmupJobs(queue);
 
-  console.log("[warmup] Worker started and simulation job queued.");
+  console.log("[wa-worker] Baileys + flujos + outbound + warmup listos.");
 
   const shutdown = async (signal: "SIGINT" | "SIGTERM"): Promise<void> => {
-    console.log(`[warmup] Received ${signal}, shutting down worker...`);
+    console.log(`[wa-worker] ${signal} — cerrando...`);
     await worker.close();
     await queue.close();
+    redis.disconnect();
     process.exit(0);
   };
 
@@ -59,6 +49,6 @@ async function bootstrap(): Promise<void> {
 }
 
 bootstrap().catch((error) => {
-  console.error("[warmup] Failed to bootstrap worker:", error);
+  console.error("[wa-worker] Bootstrap failed:", error);
   process.exit(1);
 });

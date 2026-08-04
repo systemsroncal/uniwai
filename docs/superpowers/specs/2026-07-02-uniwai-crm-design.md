@@ -3,10 +3,10 @@
 **Producto:** UniWai CRM (Enterprise Edition)  
 **Repositorio:** [`systemsroncal/uniwai`](https://github.com/systemsroncal/uniwai.git)  
 **Dominios proyectados:** uniwaicrm.com · uniwai.com · uniwai.pe  
-**Versión del documento:** 2.0  
-**Fecha:** 2026-07-02  
-**Estado:** En revisión — decisiones parciales aprobadas (ver §0.1)  
-**Autor:** Sesión de diseño Superpowers (brainstorming)
+**Versión del documento:** 3.0  
+**Fecha:** 2026-07-02 (actualizado)  
+**Estado:** Análisis v3.0 — Fases 0–9 en progreso avanzado (ver §1.1)  
+**Autor:** Sesión de diseño Superpowers + auditoría de código UniWai
 
 ---
 
@@ -52,6 +52,34 @@ Este spec **unifica** tres fuentes:
 **Decisión arquitectónica clave:** Monorepo con separación clara entre UI (Next.js), API (Hono/Bun), workers (Baileys, BullMQ, warmup) y paquete compartido de base de datos (Prisma).
 
 **Advertencia legal/técnica:** La conexión no oficial (Baileys) viola los Términos de Servicio de WhatsApp/Meta. El producto debe etiquetarlo explícitamente, ofrecer la API oficial como canal recomendado, y documentar riesgo de baneo permanente del número. Las funciones "anti-ban" reducen probabilidad pero **no garantizan** cumplimiento ni ausencia de baneos.
+
+### 1.1 Estado de implementación (gap analysis v3.0 — 2026-07-03)
+
+| Módulo / Fase | Estado | Notas |
+|---------------|--------|-------|
+| **F0** Monorepo, Prisma, Supabase, auth | ✅ Hecho | Workspaces Bun, `bootstrap:dev`, RLS baseline |
+| **F1** Meta Cloud API + inbox | 🟡 Parcial | Adapter Meta en worker + inbox API; webhook Meta pendiente prod |
+| **F2** Baileys + QR | 🟡 Parcial | Worker Baileys, QR en Redis, UI escaneo; sesiones en `data/sessions` |
+| **F3** Bot Builder + executor | 🟡 Parcial | Canvas React Flow + guardar/cargar API; executor runtime pendiente |
+| **F4** Kanban + human takeover | 🟡 Parcial | Tablero + panel prospecto + mensajes; toggle bot en API básico |
+| **F5** Warmup P2P | 🟡 Parcial | BullMQ repeat job, Spintax, WarmupLog, envío real si Baileys conectado |
+| **F6** IA BYOK + RAG | 🟡 Parcial | Embeddings (OpenAI o hash dev), búsqueda pgvector; anti-injection pendiente |
+| **F7** E-commerce + PostGIS + MP | 🟡 Parcial | Productos, pedidos, MP cifrado settings; PostGIS/geo tarifas pendiente |
+| **F8** Planes, billing, superadmin | ✅ Mayoría | Panel admin, planes, impersonación tenant, seed demo |
+| **F9** Marketing + Excel | 🟡 Parcial | Import Excel contactos, export exceljs 2 hojas; dispatcher campañas pendiente |
+| **F10** Landing + hardening | 🟡 Parcial | Landing producto + MUI Modernize light/dark; CSP prod pendiente |
+| **F11+** MCP, omnicanal, plugins | ⬜ Roadmap | Fuera de v1 |
+
+**Seed demo:** `bun run db:seed:demo` — tenant *Tienda Demo UniWai* (`owner@demo.uniwai.dev` / `DemoOwner123!`).
+
+**Comandos clave:**
+
+```bash
+bun run bootstrap:dev    # planes + superadmin + seed demo
+bun run dev:api          # :3001
+bun run dev:web          # :3000
+bun run dev:worker       # Baileys + warmup P2P (requiere REDIS_URL)
+```
 
 ---
 
@@ -571,4 +599,4 @@ services:
 
 ---
 
-*Documento UniWai CRM v2.0 — unifica WA-PRO-CRM base + SRS V3 enterprise. Pendiente de aprobación antes de escribir código.*
+*Documento UniWai CRM v3.0 — unifica WA-PRO-CRM base + SRS V3 enterprise. Actualizado con gap analysis de código en repo.*

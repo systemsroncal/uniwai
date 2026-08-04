@@ -30,7 +30,8 @@ enabled = true
 schema_paths = []
 
 [db.seed]
-enabled = true
+# Plans/schema are created by Prisma (`bun run setup:db`); seed.sql schema differs.
+enabled = false
 sql_paths = ["./seed.sql"]
 
 [realtime]
